@@ -1,0 +1,129 @@
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: crowd-image-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+      - ./certs:/etc/nginx/certs:ro
+      - ./dashboard:/usr/share/nginx/html/dashboard:ro
+      - ./config/routing-log.json:/usr/share/nginx/html/dashboard/routing-log.json:ro
+    depends_on:
+      - orthanc
+      - ohif
+    networks:
+      - orthanc-net
+
+  ohif:
+    image: ohif/app:v3.12.0
+    container_name: ohif-viewer
+    restart: unless-stopped
+    environment:
+      APP_CONFIG: |
+        window.config = {
+          routerBasename: '/',
+          extensions: [],
+          modes: [],
+          whiteLabeling: {
+            createLogoComponentFn: function(React) {
+              return React.createElement('span', {
+                className: 'header-brand',
+              });
+            },
+          },
+          customizationService: {},
+          showStudyList: true,
+          maxNumberOfWebWorkers: 3,
+          showWarningMessageForCrossOrigin: false,
+          showCPUFallbackMessage: true,
+          showLoadingIndicator: true,
+          strictZSpacingForVolumeViewport: true,
+          groupEnabledModesFirst: true,
+          maxNumRequests: {
+            interaction: 100,
+            thumbnail: 75,
+            prefetch: 25,
+          },
+          investigationalUseDialog: { option: 'never' },
+          defaultDataSourceName: 'dicomweb',
+          dataSources: [
+            {
+              namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
+              sourceName: 'dicomweb',
+              configuration: {
+                friendlyName: 'Orthanc DICOM Server',
+                name: 'orthanc',
+                wadoUriRoot: '/wado',
+                qidoRoot: '/dicom-web',
+                wadoRoot: '/dicom-web',
+                qidoSupportsIncludeField: false,
+                imageRendering: 'wadors',
+                thumbnailRendering: 'wadors',
+                enableStudyLazyLoad: true,
+                supportsFuzzyMatching: false,
+                supportsWildcard: true,
+                staticWado: true,
+                singlepart: 'bulkdata,video',
+                acceptHeader: ['multipart/related; type=application/octet-stream; transfer-syntax=*'],
+                bulkDataURI: { enabled: true, relativeResolution: 'studies' },
+                omitQuotationForMultipartRequest: true,
+              },
+            },
+          ],
+        };
+    networks:
+      - orthanc-net
+
+  orthanc:
+    image: orthancteam/orthanc:26.1.0
+    container_name: orthanc
+    restart: unless-stopped
+    ports:
+      - "11112:11112" # DICOM port (receive from modalities)
+    volumes:
+      - ./config/orthanc.json:/etc/orthanc/orthanc.json
+      - ./config/autoforward.lua:/etc/orthanc/autoforward.lua:ro
+      - ./config/routing-rules.json:/var/lib/orthanc/routing-rules.json
+      - ./config/routing-log.json:/var/lib/orthanc/routing-log.json
+      - ./config/storage-settings.json:/var/lib/orthanc/storage-settings.json
+      - orthanc-storage:/var/lib/orthanc/db
+    environment:
+      - ORTHANC__POSTGRESQL__HOST=postgres
+      - VERBOSE_ENABLED=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - orthanc-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: orthanc-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: orthanc
+      POSTGRES_USER: orthanc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orthanc-secure-change-me}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orthanc"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - orthanc-net
+
+volumes:
+  orthanc-storage:
+    driver: local
+  postgres-data:
+    driver: local
+
+networks:
+  orthanc-net:
+    driver: bridge

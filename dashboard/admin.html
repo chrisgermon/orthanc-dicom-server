@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Crowd Image Management</title>
+  <link rel="icon" type="image/png" href="/manage/logo.png">
+  <style>
+    :root {
+      --purple-dark: #3a1f6e;
+      --purple: #5b2d8e;
+      --blue: #0077cc;
+      --blue-light: #00a3e0;
+      --bg: #0f1117;
+      --bg-card: #1a1d27;
+      --bg-card-hover: #222533;
+      --bg-input: #252836;
+      --text: #e8eaed;
+      --text-muted: #8b8fa3;
+      --text-dim: #5f6377;
+      --border: #2a2d3a;
+      --success: #34d399;
+      --danger: #f87171;
+      --warning: #fbbf24;
+      --gradient: linear-gradient(135deg, var(--purple) 0%, var(--blue) 100%);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    .header { background: var(--bg-card); border-bottom: 1px solid var(--border); padding: 0 24px; height: 80px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .header-left { display: flex; align-items: center; gap: 16px; }
+    .header-right { display: flex; align-items: center; gap: 12px; }
+    .nav-tabs { display: flex; gap: 4px; background: var(--bg); padding: 4px; border-radius: 8px; }
+    .nav-tab { padding: 8px 16px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; border-radius: 6px; font-size: 13px; font-weight: 500; transition: all 0.2s; }
+    .nav-tab:hover { color: var(--text); background: var(--bg-card); }
+    .nav-tab.active { color: #fff; background: var(--gradient); }
+    .status-badge { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--bg); border-radius: 20px; font-size: 12px; color: var(--text-muted); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: pulse 2s infinite; }
+    .status-dot.offline { background: var(--danger); animation: none; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; white-space: nowrap; text-decoration: none; }
+    .btn:hover { background: var(--bg-card-hover); border-color: var(--text-dim); }
+    .btn-primary { background: var(--gradient); border-color: transparent; color: #fff; }
+    .btn-primary:hover { opacity: 0.9; background: var(--gradient); }
+    .btn-danger { color: var(--danger); }
+    .btn-danger:hover { background: rgba(248,113,113,0.1); border-color: var(--danger); }
+    .btn-success { color: var(--success); }
+    .btn-success:hover { background: rgba(52,211,153,0.1); border-color: var(--success); }
+    .btn-sm { padding: 6px 10px; font-size: 12px; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; outline: none; font-family: inherit; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--blue); }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; transition: border-color 0.2s; }
+    .stat-card:hover { border-color: var(--blue); }
+    .stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .stat-value { font-size: 28px; font-weight: 700; background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .stat-sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+    .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+    .card-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+    .section { display: none; }
+    .section.active { display: block; }
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+    .section-title { font-size: 20px; font-weight: 700; }
+    .modality-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+    .modality-info h3 { font-size: 15px; font-weight: 600; }
+    .modality-info p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .job-item { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+    .job-type { font-weight: 600; font-size: 13px; }
+    .job-status { font-size: 12px; padding: 3px 8px; border-radius: 4px; }
+    .job-status.Running { background: rgba(251,191,36,0.15); color: var(--warning); }
+    .job-status.Success { background: rgba(52,211,153,0.15); color: var(--success); }
+    .job-status.Failure { background: rgba(248,113,113,0.15); color: var(--danger); }
+    .job-status.Paused { background: rgba(139,143,163,0.15); color: var(--text-muted); }
+    .job-status.Pending { background: rgba(0,163,224,0.15); color: var(--blue-light); }
+    .log-entry { font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; font-size: 12px; padding: 8px 12px; border-bottom: 1px solid var(--border); line-height: 1.5; }
+    .log-entry:last-child { border-bottom: none; }
+    .log-entry .log-seq { color: var(--text-dim); margin-right: 8px; }
+    .log-entry .log-time { color: var(--text-muted); margin-right: 8px; }
+    .log-entry .log-type { font-weight: 600; margin-right: 8px; }
+    .info-list { list-style: none; }
+    .info-list li { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .info-list li:last-child { border-bottom: none; }
+    .info-list .label { color: var(--text-muted); }
+    .info-list .value { color: var(--text); font-weight: 500; font-family: 'SF Mono', 'Menlo', monospace; font-size: 12px; }
+    .plugin-tag { display: inline-block; padding: 4px 10px; background: rgba(91,45,142,0.15); color: var(--blue-light); border-radius: 6px; font-size: 12px; font-weight: 500; margin: 3px; }
+    .login-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 500; display: flex; align-items: center; justify-content: center; }
+    .login-overlay.hidden { display: none; }
+    .login-box { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 40px; width: 100%; max-width: 400px; text-align: center; }
+    .login-box h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .login-box .subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 28px; }
+    .login-box .error-msg { color: var(--danger); font-size: 13px; margin-bottom: 12px; display: none; }
+    .login-box .error-msg.visible { display: block; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; width: 90%; max-width: 520px; max-height: 80vh; overflow-y: auto; }
+    .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+    .toast-container { position: fixed; top: 96px; right: 24px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 500; animation: slideIn 0.3s ease; min-width: 280px; }
+    .toast.success { background: rgba(52,211,153,0.15); border: 1px solid var(--success); color: var(--success); }
+    .toast.error { background: rgba(248,113,113,0.15); border: 1px solid var(--danger); color: var(--danger); }
+    .toast.info { background: rgba(0,163,224,0.15); border: 1px solid var(--blue-light); color: var(--blue-light); }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .rule-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+    .rule-card.disabled { opacity: 0.5; }
+    .rule-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+    .rule-name { font-size: 15px; font-weight: 600; }
+    .rule-detail { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .rule-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .rule-badge.active { background: rgba(52,211,153,0.15); color: var(--success); }
+    .rule-badge.inactive { background: rgba(139,143,163,0.15); color: var(--text-muted); }
+    .toggle { position: relative; display: inline-block; width: 36px; height: 20px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle .slider { position: absolute; cursor: pointer; inset: 0; background: var(--border); border-radius: 20px; transition: 0.2s; }
+    .toggle .slider::before { content: ''; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s; }
+    .toggle input:checked + .slider { background: var(--success); }
+    .toggle input:checked + .slider::before { transform: translateX(16px); }
+    @media (max-width: 768px) {
+      .header { padding: 0 12px; flex-wrap: wrap; height: auto; min-height: 80px; padding-top: 12px; padding-bottom: 12px; }
+      .main { padding: 16px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .grid-2 { grid-template-columns: 1fr; }
+      .login-box { margin: 16px; padding: 24px; }
+    }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+    .site-footer { text-align: center; padding: 24px; font-size: 12px; color: var(--text-dim); }
+    .site-footer a { color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
+    .site-footer a:hover { color: var(--blue-light); }
+  </style>
+</head>
+<body>
+
+  <!-- Login Overlay -->
+  <div class="login-overlay" id="loginOverlay">
+    <div class="login-box">
+      <h1>Server Admin</h1>
+      <div class="subtitle">Crowd Image Management</div>
+      <div class="error-msg" id="loginError">Invalid credentials. Please try again.</div>
+      <form id="loginForm" onsubmit="return doLogin(event)">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="loginUser" autocomplete="username" required autofocus>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="loginPass" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;">Sign In</button>
+      </form>
+      <div style="margin-top:20px;">
+        <a href="/manage/" class="btn btn-sm" style="font-size:12px;">&larr; Back to Dashboard</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="header" id="appHeader" style="display:none;">
+    <div class="header-left">
+      <span style="color:#fff;font-size:22px;font-weight:700;letter-spacing:0.5px;">Server Admin</span>
+      <nav class="nav-tabs" id="navTabs">
+        <button class="nav-tab active" data-section="dashboard">Dashboard</button>
+        <button class="nav-tab" data-section="modalities">Modalities</button>
+        <button class="nav-tab" data-section="routing">Routing</button>
+        <button class="nav-tab" data-section="logs">Logs</button>
+        <button class="nav-tab" data-section="jobs">Jobs</button>
+        <button class="nav-tab" data-section="settings">Settings</button>
+      </nav>
+    </div>
+    <div class="header-right">
+      <div class="status-badge">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+      <a href="/manage/" class="btn btn-sm">&larr; Dashboard</a>
+      <button class="btn btn-sm btn-danger" onclick="doLogout()">Logout</button>
+    </div>
+  </header>
+
+  <main class="main" id="appMain" style="display:none;">
+
+    <!-- Dashboard -->
+    <section class="section active" id="sec-dashboard">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-label">Patients</div><div class="stat-value" id="statPatients">-</div></div>
+        <div class="stat-card"><div class="stat-label">Studies</div><div class="stat-value" id="statStudies">-</div></div>
+        <div class="stat-card"><div class="stat-label">Series</div><div class="stat-value" id="statSeries">-</div></div>
+        <div class="stat-card"><div class="stat-label">Instances</div><div class="stat-value" id="statInstances">-</div></div>
+        <div class="stat-card"><div class="stat-label">Disk Usage</div><div class="stat-value" id="statDisk">-</div></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">System Information</div>
+          <ul class="info-list" id="sysInfoList"><li><span class="label">Loading...</span></li></ul>
+        </div>
+        <div class="card">
+          <div class="card-title">DICOM Server</div>
+          <ul class="info-list" id="dicomInfoList"><li><span class="label">Loading...</span></li></ul>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Installed Plugins</div>
+        <div id="pluginsList">Loading...</div>
+      </div>
+    </section>
+
+    <!-- Modalities -->
+    <section class="section" id="sec-modalities">
+      <div class="section-header">
+        <h2 class="section-title">DICOM Modalities</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="loadModalities()">Refresh</button>
+          <button class="btn btn-primary" onclick="openModalityModal()">Add Modality</button>
+        </div>
+      </div>
+      <div id="modalitiesList"></div>
+    </section>
+
+    <!-- Routing -->
+    <section class="section" id="sec-routing">
+      <div class="section-header">
+        <h2 class="section-title">Auto-Routing Rules</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="loadRoutingRules()">Refresh</button>
+          <button class="btn btn-primary" onclick="openRuleModal()">Add Rule</button>
+        </div>
+      </div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+        When a study becomes stable (fully received), it is checked against these rules. Matching studies are automatically forwarded to the destination modality.
+      </p>
+      <div id="routingRulesList"></div>
+      <div id="emptyRouting" style="display:none;text-align:center;padding:48px;color:var(--text-muted);">
+        <div style="font-size:48px;margin-bottom:12px;opacity:0.5;">&#128268;</div>
+        <h3 style="font-size:16px;color:var(--text);margin-bottom:4px;">No routing rules configured</h3>
+        <p style="font-size:13px;">Click "Add Rule" to auto-forward incoming studies to another modality.</p>
+      </div>
+    </section>
+
+    <!-- Logs -->
+    <section class="section" id="sec-logs">
+      <div class="section-header">
+        <h2 class="section-title">Changes Feed</h2>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label style="font-size:12px;color:var(--text-muted);">Show last:</label>
+          <select id="logLimit" style="padding:6px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;" onchange="loadChanges()">
+            <option value="30">30</option>
+            <option value="50" selected>50</option>
+            <option value="100">100</option>
+            <option value="200">200</option>
+          </select>
+          <button class="btn btn-sm" onclick="loadChanges()">Refresh</button>
+        </div>
+      </div>
+      <div class="card" style="padding:0;max-height:600px;overflow-y:auto;">
+        <div id="changesLog"><div class="log-entry" style="color:var(--text-muted);">Loading...</div></div>
+      </div>
+    </section>
+
+    <!-- Jobs -->
+    <section class="section" id="sec-jobs">
+      <div class="section-header">
+        <h2 class="section-title">Jobs</h2>
+        <button class="btn" onclick="loadJobs()">Refresh</button>
+      </div>
+      <div id="jobsList"></div>
+      <div id="emptyJobs" style="display:none;text-align:center;padding:48px;color:var(--text-muted);">
+        <div style="font-size:48px;margin-bottom:12px;opacity:0.5;">&#9881;</div>
+        <h3 style="font-size:16px;color:var(--text);margin-bottom:4px;">No recent jobs</h3>
+        <p style="font-size:13px;">Operations will show here.</p>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section class="section" id="sec-settings">
+      <div class="section-header">
+        <h2 class="section-title">Settings &amp; Maintenance</h2>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">DICOM Server Configuration</div>
+          <div class="form-group">
+            <label>AE Title</label>
+            <input type="text" id="settingAet" placeholder="ORTHANC">
+          </div>
+          <div class="form-group">
+            <label>DICOM Port</label>
+            <input type="number" id="settingPort" placeholder="11112">
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary btn-sm" onclick="saveDicomConfig()">Save &amp; Restart</button>
+          </div>
+          <p style="font-size:11px;color:var(--text-dim);margin-top:8px;">Changes require editing orthanc.json and restarting the container.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Log Level</div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>Current Log Level</label>
+            <select id="logLevelSelect" style="width:100%;padding:10px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;">
+              <option value="default">Default</option>
+              <option value="verbose">Verbose</option>
+              <option value="trace">Trace</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="setLogLevel()">Apply</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">DICOM Server Info</div>
+          <ul class="info-list" id="settingsDicomInfo"><li><span class="label">Loading...</span></li></ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Maintenance Tools</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button class="btn" onclick="reconstructIndex()">Reconstruct Index</button>
+            <button class="btn btn-danger" onclick="clearChanges()">Clear Changes History</button>
+          </div>
+          <p style="font-size:11px;color:var(--text-dim);margin-top:12px;">Reconstruct rebuilds the main DICOM tags index. Clear changes removes the changes log.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Database Stats</div>
+          <ul class="info-list" id="dbStatsList"><li><span class="label">Loading...</span></li></ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Storage Watermark</div>
+          <div style="display:flex;gap:16px;align-items:baseline;margin-bottom:12px;">
+            <div><span style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Disk Usage</span><div id="watermarkDiskUsage" style="font-size:22px;font-weight:700;margin-top:4px;color:var(--text);">-</div></div>
+            <div><span style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Watermark</span><div id="watermarkCurrent" style="font-size:22px;font-weight:700;margin-top:4px;color:var(--text);">-</div></div>
+          </div>
+          <div class="form-group">
+            <label>Watermark % (0 = disabled, 1-99)</label>
+            <input type="number" id="watermarkInput" min="0" max="99" placeholder="80">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="saveWatermark()">Save</button>
+          <p style="font-size:11px;color:var(--text-dim);margin-top:8px;">Oldest studies are auto-deleted when disk exceeds this %. Set to 0 to disable.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modality Modal -->
+  <div class="modal-overlay" id="modalityModal">
+    <div class="modal">
+      <div class="modal-title" id="modalityModalTitle">Add Modality</div>
+      <input type="hidden" id="modalityEditName">
+      <div class="form-group"><label>Name (identifier)</label><input type="text" id="modName" placeholder="e.g. CT_SCANNER_1"></div>
+      <div class="form-group"><label>AE Title</label><input type="text" id="modAET" placeholder="e.g. CT_SCANNER"></div>
+      <div class="form-group"><label>Host / IP</label><input type="text" id="modHost" placeholder="e.g. 192.168.1.100"></div>
+      <div class="form-group"><label>Port</label><input type="number" id="modPort" placeholder="e.g. 104" value="104"></div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModalityModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveModality()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Routing Rule Modal -->
+  <div class="modal-overlay" id="ruleModal">
+    <div class="modal">
+      <div class="modal-title" id="ruleModalTitle">Add Routing Rule</div>
+      <input type="hidden" id="ruleEditIndex" value="-1">
+      <div class="form-group"><label>Rule Name</label><input type="text" id="ruleName" placeholder="e.g. Forward CT to PACS"></div>
+      <div class="form-group">
+        <label>Destination Modality</label>
+        <select id="ruleDestination"></select>
+      </div>
+      <div class="form-group">
+        <label>Filter: Modality Type (optional)</label>
+        <input type="text" id="ruleFilterModality" placeholder="e.g. CT, MR, CR, * for any">
+      </div>
+      <div class="form-group">
+        <label>Filter: Study Description (optional)</label>
+        <input type="text" id="ruleFilterDescription" placeholder="e.g. *chest*, *spine*">
+      </div>
+      <div class="form-group">
+        <label>Filter: Calling AE Title (optional)</label>
+        <input type="text" id="ruleFilterCallingAet" placeholder="e.g. CT_SCANNER_1">
+      </div>
+      <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Leave filters blank to match all studies. Use * as wildcard.</p>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeRuleModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveRule()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toasts"></div>
+
+  <script>
+    const API = '/admin-api';
+    let authHeader = '';
+    let routingRules = [];
+
+    // ── Auth ──
+    function doLogin(e) {
+      e.preventDefault();
+      const user = document.getElementById('loginUser').value;
+      const pass = document.getElementById('loginPass').value;
+      authHeader = 'Basic ' + btoa(user + ':' + pass);
+      fetch(API + '/system', { headers: { 'Authorization': authHeader } })
+        .then(r => {
+          if (r.status === 401) {
+            document.getElementById('loginError').classList.add('visible');
+            authHeader = '';
+            return;
+          }
+          if (!r.ok) throw new Error('Server error');
+          return r.json();
+        })
+        .then(data => {
+          if (!data) return;
+          sessionStorage.setItem('adminAuth', authHeader);
+          showApp();
+        })
+        .catch(() => {
+          document.getElementById('loginError').textContent = 'Connection failed. Is the server running?';
+          document.getElementById('loginError').classList.add('visible');
+          authHeader = '';
+        });
+      return false;
+    }
+
+    function doLogout() {
+      sessionStorage.removeItem('adminAuth');
+      authHeader = '';
+      document.getElementById('loginOverlay').classList.remove('hidden');
+      document.getElementById('appHeader').style.display = 'none';
+      document.getElementById('appMain').style.display = 'none';
+      document.getElementById('loginUser').value = '';
+      document.getElementById('loginPass').value = '';
+      document.getElementById('loginError').classList.remove('visible');
+    }
+
+    function showApp() {
+      document.getElementById('loginOverlay').classList.add('hidden');
+      document.getElementById('appHeader').style.display = 'flex';
+      document.getElementById('appMain').style.display = 'block';
+      initApp();
+    }
+
+    (function() {
+      const saved = sessionStorage.getItem('adminAuth');
+      if (saved) {
+        authHeader = saved;
+        fetch(API + '/system', { headers: { 'Authorization': authHeader } })
+          .then(r => { if (r.ok) showApp(); else doLogout(); })
+          .catch(() => doLogout());
+      }
+    })();
+
+    // ── API ──
+    async function api(path, options = {}) {
+      const res = await fetch(API + path, {
+        headers: { 'Content-Type': 'application/json', 'Authorization': authHeader, ...options.headers },
+        ...options
+      });
+      if (res.status === 401) { doLogout(); throw new Error('Unauthorized'); }
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
+    }
+
+    async function apiText(path, options = {}) {
+      const res = await fetch(API + path, {
+        headers: { 'Authorization': authHeader, ...options.headers },
+        ...options
+      });
+      if (res.status === 401) { doLogout(); throw new Error('Unauthorized'); }
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      return await res.text();
+    }
+
+    function toast(msg, type = 'info') {
+      const el = document.createElement('div');
+      el.className = 'toast ' + type;
+      el.textContent = msg;
+      document.getElementById('toasts').appendChild(el);
+      setTimeout(() => el.remove(), 4000);
+    }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    // ── Navigation ──
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        tab.classList.add('active');
+        const sec = tab.dataset.section;
+        document.getElementById('sec-' + sec).classList.add('active');
+        if (sec === 'modalities') loadModalities();
+        if (sec === 'routing') loadRoutingRules();
+        if (sec === 'logs') loadChanges();
+        if (sec === 'jobs') loadJobs();
+        if (sec === 'settings') loadSettings();
+      });
+    });
+
+    function initApp() { loadDashboard(); }
+
+    // ── Dashboard ──
+    async function loadDashboard() {
+      try {
+        const [stats, system] = await Promise.all([api('/statistics'), api('/system')]);
+        document.getElementById('statPatients').textContent = stats.CountPatients.toLocaleString();
+        document.getElementById('statStudies').textContent = stats.CountStudies.toLocaleString();
+        document.getElementById('statSeries').textContent = stats.CountSeries.toLocaleString();
+        document.getElementById('statInstances').textContent = stats.CountInstances.toLocaleString();
+        const mb = stats.TotalDiskSizeMB || (stats.TotalDiskSize / 1048576);
+        document.getElementById('statDisk').textContent = mb > 1024 ? (mb / 1024).toFixed(1) + ' GB' : mb.toFixed(0) + ' MB';
+        document.getElementById('statusDot').classList.remove('offline');
+        document.getElementById('statusText').textContent = 'Online';
+
+        document.getElementById('sysInfoList').innerHTML = [
+          ['Version', system.Version], ['API Version', system.ApiVersion],
+          ['Database Version', system.DatabaseVersion],
+          ['Storage Size', mb > 1024 ? (mb/1024).toFixed(1)+' GB' : mb.toFixed(0)+' MB'],
+          ['Uncompressed', formatSize(stats.TotalUncompressedSize)],
+        ].map(([l,v]) => `<li><span class="label">${esc(l)}</span><span class="value">${esc(String(v || '-'))}</span></li>`).join('');
+
+        document.getElementById('dicomInfoList').innerHTML = [
+          ['DICOM AET', system.DicomAet], ['DICOM Port', system.DicomPort],
+          ['HTTP Port', system.HttpPort],
+          ['Overwrite Instances', system.OverwriteInstances ? 'Yes' : 'No'],
+          ['Storage Compression', system.StorageCompression ? 'Yes' : 'No'],
+        ].map(([l,v]) => `<li><span class="label">${esc(l)}</span><span class="value">${esc(String(v || '-'))}</span></li>`).join('');
+
+        try {
+          const plugins = await api('/plugins');
+          document.getElementById('pluginsList').innerHTML = plugins && plugins.length > 0
+            ? plugins.map(p => `<span class="plugin-tag">${esc(p)}</span>`).join('')
+            : 'No plugins installed.';
+        } catch (e) { document.getElementById('pluginsList').textContent = 'Could not load plugins.'; }
+      } catch (e) {
+        document.getElementById('statusDot').classList.add('offline');
+        document.getElementById('statusText').textContent = 'Offline';
+        toast('Failed to load dashboard: ' + e.message, 'error');
+      }
+    }
+
+    function formatSize(bytes) {
+      if (!bytes) return '-';
+      const mb = bytes / 1048576;
+      return mb > 1024 ? (mb/1024).toFixed(1)+' GB' : mb.toFixed(0)+' MB';
+    }
+
+    // ── Modalities ──
+    async function loadModalities() {
+      try {
+        const mods = await api('/modalities?expand');
+        const list = document.getElementById('modalitiesList');
+        const entries = Object.entries(mods);
+        if (entries.length === 0) {
+          list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--text-muted);"><div style="font-size:48px;margin-bottom:12px;opacity:0.5;">&#128225;</div><h3 style="font-size:16px;color:var(--text);margin-bottom:4px;">No modalities configured</h3><p style="font-size:13px;">Click "Add Modality" to configure one.</p></div>';
+          return;
+        }
+        list.innerHTML = entries.map(([name, config]) => {
+          const aet = config.AET || config[0] || '?';
+          const host = config.Host || config[1] || '?';
+          const port = config.Port || config[2] || '?';
+          return `<div class="modality-card">
+            <div class="modality-info"><h3>${esc(name)}</h3><p>AET: ${esc(aet)} &middot; ${esc(host)}:${port}</p></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-sm btn-success" onclick="echoModality('${esc(name)}')">C-ECHO</button>
+              <button class="btn btn-sm" onclick="editModality('${esc(name)}')">Edit</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteModality('${esc(name)}')">Delete</button>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) { toast('Failed to load modalities: ' + e.message, 'error'); }
+    }
+
+    async function echoModality(name) {
+      try {
+        toast(`Testing C-ECHO to ${name}...`, 'info');
+        await api('/modalities/' + encodeURIComponent(name) + '/echo', { method: 'POST' });
+        toast(`C-ECHO to ${name}: Success`, 'success');
+      } catch (e) { toast(`C-ECHO to ${name}: Failed - ${e.message}`, 'error'); }
+    }
+
+    function openModalityModal(editName) {
+      document.getElementById('modalityEditName').value = editName || '';
+      document.getElementById('modalityModalTitle').textContent = editName ? 'Edit Modality' : 'Add Modality';
+      if (!editName) {
+        document.getElementById('modName').value = '';
+        document.getElementById('modAET').value = '';
+        document.getElementById('modHost').value = '';
+        document.getElementById('modPort').value = '104';
+        document.getElementById('modName').disabled = false;
+      }
+      document.getElementById('modalityModal').classList.add('active');
+    }
+
+    function closeModalityModal() { document.getElementById('modalityModal').classList.remove('active'); }
+
+    async function editModality(name) {
+      try {
+        const config = await api('/modalities/' + encodeURIComponent(name));
+        openModalityModal(name);
+        document.getElementById('modName').value = name;
+        document.getElementById('modName').disabled = true;
+        document.getElementById('modAET').value = config.AET || config[0] || '';
+        document.getElementById('modHost').value = config.Host || config[1] || '';
+        document.getElementById('modPort').value = config.Port || config[2] || 104;
+      } catch (e) { toast('Failed to load modality: ' + e.message, 'error'); }
+    }
+
+    async function saveModality() {
+      const editName = document.getElementById('modalityEditName').value;
+      const name = document.getElementById('modName').value.trim();
+      const aet = document.getElementById('modAET').value.trim();
+      const host = document.getElementById('modHost').value.trim();
+      const port = parseInt(document.getElementById('modPort').value) || 104;
+      if (!name || !aet || !host) { toast('Please fill in all fields', 'error'); return; }
+      try {
+        await api('/modalities/' + encodeURIComponent(editName || name), {
+          method: 'PUT', body: JSON.stringify({ AET: aet, Host: host, Port: port })
+        });
+        toast(`Modality "${name}" saved`, 'success');
+        closeModalityModal();
+        loadModalities();
+      } catch (e) { toast('Failed to save modality: ' + e.message, 'error'); }
+    }
+
+    async function deleteModality(name) {
+      if (!confirm(`Delete modality "${name}"?`)) return;
+      try {
+        await api('/modalities/' + encodeURIComponent(name), { method: 'DELETE' });
+        toast(`Modality "${name}" deleted`, 'success');
+        loadModalities();
+      } catch (e) { toast('Failed to delete: ' + e.message, 'error'); }
+    }
+
+    // ── Routing Rules ──
+    async function loadRoutingRules() {
+      try {
+        const luaScript = 'print(DumpJson(ROUTING_RULES or {}))';
+        const result = await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript
+        });
+
+        try {
+          const parsed = JSON.parse(result.trim());
+          routingRules = Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          routingRules = [];
+        }
+        renderRoutingRules();
+      } catch (e) {
+        toast('Failed to load routing rules: ' + e.message, 'error');
+      }
+    }
+
+    function renderRoutingRules() {
+      const list = document.getElementById('routingRulesList');
+      const empty = document.getElementById('emptyRouting');
+
+      if (routingRules.length === 0) {
+        list.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+
+      empty.style.display = 'none';
+      list.innerHTML = routingRules.map((rule, i) => {
+        const filters = [];
+        if (rule.filterModality) filters.push('Modality: ' + rule.filterModality);
+        if (rule.filterDescription) filters.push('Desc: ' + rule.filterDescription);
+        if (rule.filterCallingAet) filters.push('AET: ' + rule.filterCallingAet);
+        const filterText = filters.length > 0 ? filters.join(' | ') : 'All studies';
+
+        return `<div class="rule-card ${rule.enabled ? '' : 'disabled'}">
+          <div class="rule-header">
+            <div>
+              <span class="rule-name">${esc(rule.name || 'Unnamed Rule')}</span>
+              <span class="rule-badge ${rule.enabled ? 'active' : 'inactive'}">${rule.enabled ? 'Active' : 'Inactive'}</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <label class="toggle">
+                <input type="checkbox" ${rule.enabled ? 'checked' : ''} onchange="toggleRule(${i}, this.checked)">
+                <span class="slider"></span>
+              </label>
+              <button class="btn btn-sm" onclick="editRule(${i})">Edit</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteRule(${i})">Delete</button>
+            </div>
+          </div>
+          <div class="rule-detail">Destination: <strong>${esc(rule.destination || '-')}</strong> | Filters: ${esc(filterText)}</div>
+        </div>`;
+      }).join('');
+    }
+
+    async function populateRuleDestinations() {
+      try {
+        const mods = await api('/modalities?expand');
+        const sel = document.getElementById('ruleDestination');
+        sel.innerHTML = Object.entries(mods).map(([name, config]) =>
+          `<option value="${esc(name)}">${esc(name)} (${esc(config.AET || config[0])} @ ${esc(config.Host || config[1])}:${config.Port || config[2]})</option>`
+        ).join('');
+      } catch (e) { toast('Failed to load modalities for routing', 'error'); }
+    }
+
+    function openRuleModal(editIndex) {
+      const isEdit = editIndex !== undefined && editIndex >= 0;
+      document.getElementById('ruleEditIndex').value = isEdit ? editIndex : -1;
+      document.getElementById('ruleModalTitle').textContent = isEdit ? 'Edit Routing Rule' : 'Add Routing Rule';
+
+      if (isEdit) {
+        const rule = routingRules[editIndex];
+        document.getElementById('ruleName').value = rule.name || '';
+        document.getElementById('ruleFilterModality').value = rule.filterModality || '';
+        document.getElementById('ruleFilterDescription').value = rule.filterDescription || '';
+        document.getElementById('ruleFilterCallingAet').value = rule.filterCallingAet || '';
+        populateRuleDestinations().then(() => {
+          document.getElementById('ruleDestination').value = rule.destination || '';
+        });
+      } else {
+        document.getElementById('ruleName').value = '';
+        document.getElementById('ruleFilterModality').value = '';
+        document.getElementById('ruleFilterDescription').value = '';
+        document.getElementById('ruleFilterCallingAet').value = '';
+        populateRuleDestinations();
+      }
+      document.getElementById('ruleModal').classList.add('active');
+    }
+
+    function closeRuleModal() { document.getElementById('ruleModal').classList.remove('active'); }
+
+    function editRule(index) { openRuleModal(index); }
+
+    async function saveRule() {
+      const editIndex = parseInt(document.getElementById('ruleEditIndex').value);
+      const rule = {
+        name: document.getElementById('ruleName').value.trim(),
+        enabled: true,
+        destination: document.getElementById('ruleDestination').value,
+        filterModality: document.getElementById('ruleFilterModality').value.trim(),
+        filterDescription: document.getElementById('ruleFilterDescription').value.trim(),
+        filterCallingAet: document.getElementById('ruleFilterCallingAet').value.trim()
+      };
+
+      if (!rule.name || !rule.destination) {
+        toast('Please provide a name and destination', 'error');
+        return;
+      }
+
+      if (editIndex >= 0 && editIndex < routingRules.length) {
+        rule.enabled = routingRules[editIndex].enabled;
+        routingRules[editIndex] = rule;
+      } else {
+        routingRules.push(rule);
+      }
+
+      await pushRoutingRules();
+      closeRuleModal();
+      renderRoutingRules();
+    }
+
+    async function toggleRule(index, enabled) {
+      routingRules[index].enabled = enabled;
+      await pushRoutingRules();
+      renderRoutingRules();
+    }
+
+    async function deleteRule(index) {
+      if (!confirm(`Delete rule "${routingRules[index].name}"?`)) return;
+      routingRules.splice(index, 1);
+      await pushRoutingRules();
+      renderRoutingRules();
+    }
+
+    async function pushRoutingRules() {
+      try {
+        const rulesJson = JSON.stringify(routingRules);
+        // Update Lua global and save to file
+        const luaScript = `
+ROUTING_RULES = ParseJson([==[${rulesJson}]==])
+SaveRoutingRules()
+print("OK: " .. #ROUTING_RULES .. " rules active")`;
+        const result = await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript
+        });
+        toast('Routing rules saved (' + routingRules.length + ' rules)', 'success');
+      } catch (e) {
+        toast('Failed to save routing rules: ' + e.message, 'error');
+      }
+    }
+
+    // ── Changes / Logs (fetch LATEST, not oldest) ──
+    async function loadChanges() {
+      try {
+        const limit = parseInt(document.getElementById('logLimit').value);
+        // First get the last sequence number
+        const last = await api('/changes?last');
+        const lastSeq = last.Last || 0;
+
+        let changes = [];
+        if (lastSeq > 0) {
+          // Fetch from near the end
+          const since = Math.max(0, lastSeq - limit);
+          const data = await api('/changes?since=' + since + '&limit=' + limit);
+          changes = data.Changes || [];
+        }
+
+        const container = document.getElementById('changesLog');
+        if (changes.length === 0) {
+          container.innerHTML = '<div class="log-entry" style="color:var(--text-muted);">No changes recorded.</div>';
+          return;
+        }
+
+        // Show newest first
+        container.innerHTML = changes.reverse().map(c => {
+          const typeColors = {
+            NewStudy: 'var(--success)', NewSeries: 'var(--blue-light)',
+            NewInstance: 'var(--text-muted)', StableStudy: 'var(--blue)',
+            StableSeries: 'var(--blue)', StablePatient: 'var(--blue)',
+            NewPatient: 'var(--success)', Deleted: 'var(--danger)',
+          };
+          const color = typeColors[c.ChangeType] || 'var(--text)';
+          return `<div class="log-entry">
+            <span class="log-seq">#${c.Seq}</span>
+            <span class="log-time">${esc(c.Date || '')}</span>
+            <span class="log-type" style="color:${color}">${esc(c.ChangeType)}</span>
+            <span style="color:var(--text-dim)">${esc(c.ResourceType)} ${esc(c.ID ? c.ID.slice(0,12) : '')}</span>
+          </div>`;
+        }).join('');
+      } catch (e) { toast('Failed to load changes: ' + e.message, 'error'); }
+    }
+
+    // ── Jobs ──
+    async function loadJobs() {
+      try {
+        const jobs = await api('/jobs?expand');
+        const list = document.getElementById('jobsList');
+        const empty = document.getElementById('emptyJobs');
+        if (!jobs || jobs.length === 0) { list.innerHTML = ''; empty.style.display = 'block'; return; }
+        empty.style.display = 'none';
+        list.innerHTML = jobs.reverse().slice(0, 100).map(j => {
+          const actions = [];
+          if (j.State === 'Running' || j.State === 'Pending') {
+            actions.push(`<button class="btn btn-sm" onclick="jobAction('${j.ID}','pause')">Pause</button>`);
+            actions.push(`<button class="btn btn-sm btn-danger" onclick="jobAction('${j.ID}','cancel')">Cancel</button>`);
+          }
+          if (j.State === 'Paused') {
+            actions.push(`<button class="btn btn-sm btn-success" onclick="jobAction('${j.ID}','resume')">Resume</button>`);
+            actions.push(`<button class="btn btn-sm btn-danger" onclick="jobAction('${j.ID}','cancel')">Cancel</button>`);
+          }
+          if (j.State === 'Failure') {
+            actions.push(`<button class="btn btn-sm" onclick="jobAction('${j.ID}','resubmit')">Resubmit</button>`);
+          }
+          const progress = j.Progress !== undefined ? ` (${j.Progress}%)` : '';
+          return `<div class="job-item">
+            <div style="min-width:0;flex:1;">
+              <div class="job-type">${esc(j.Type)}${progress}</div>
+              <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">${esc(j.ID.slice(0,12))} &middot; ${esc(j.CreationTime || '')}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              ${actions.join('')}
+              <span class="job-status ${esc(j.State)}">${esc(j.State)}</span>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) { toast('Failed to load jobs: ' + e.message, 'error'); }
+    }
+
+    async function jobAction(jobId, action) {
+      try {
+        await api('/jobs/' + jobId + '/' + action, { method: 'POST' });
+        toast(`Job ${action}: ${jobId.slice(0,8)}`, 'success');
+        loadJobs();
+      } catch (e) { toast(`Job ${action} failed: ${e.message}`, 'error'); }
+    }
+
+    // ── Settings ──
+    async function loadSettings() {
+      try {
+        const system = await api('/system');
+        document.getElementById('settingAet').value = system.DicomAet || '';
+        document.getElementById('settingPort').value = system.DicomPort || '';
+
+        document.getElementById('settingsDicomInfo').innerHTML = [
+          ['DICOM AET', system.DicomAet], ['DICOM Port', system.DicomPort],
+          ['HTTP Port', system.HttpPort], ['Plugins Enabled', system.PluginsEnabled ? 'Yes' : 'No'],
+          ['Overwrite Instances', system.OverwriteInstances ? 'Yes' : 'No'],
+          ['Storage Compression', system.StorageCompression ? 'Yes' : 'No'],
+        ].map(([l,v]) => `<li><span class="label">${esc(l)}</span><span class="value">${esc(String(v || '-'))}</span></li>`).join('');
+
+        const stats = await api('/statistics');
+        document.getElementById('dbStatsList').innerHTML = [
+          ['Patients', stats.CountPatients], ['Studies', stats.CountStudies],
+          ['Series', stats.CountSeries], ['Instances', stats.CountInstances],
+          ['Disk Size', formatSize(stats.TotalDiskSize)],
+          ['Uncompressed', formatSize(stats.TotalUncompressedSize)],
+        ].map(([l,v]) => `<li><span class="label">${esc(l)}</span><span class="value">${esc(String(v || '-'))}</span></li>`).join('');
+
+        loadWatermarkSettings();
+      } catch (e) { toast('Failed to load settings: ' + e.message, 'error'); }
+    }
+
+    async function loadWatermarkSettings() {
+      try {
+        const luaScript = `
+local f = io.open("/var/lib/orthanc/storage-settings.json", "r")
+local wm = 0
+if f then
+  local content = f:read("*a")
+  f:close()
+  local ok, parsed = pcall(ParseJson, content)
+  if ok and parsed and parsed.watermarkPercent then
+    wm = parsed.watermarkPercent
+  end
+end
+local handle = io.popen("df -P /var/lib/orthanc/db 2>/dev/null | tail -1 | awk '{print $5}'")
+local diskPct = "?"
+if handle then
+  local r = handle:read("*a")
+  handle:close()
+  local n = r:match("(%d+)")
+  if n then diskPct = n end
+end
+print(diskPct .. "|" .. wm)`;
+        const result = await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript
+        });
+        const parts = result.trim().split('|');
+        const diskPct = parts[0] || '?';
+        const watermark = parseInt(parts[1]) || 0;
+
+        const diskNum = parseInt(diskPct);
+        let diskColor = 'var(--success)';
+        if (diskNum >= 90) diskColor = 'var(--danger)';
+        else if (diskNum >= 70) diskColor = 'var(--warning)';
+
+        document.getElementById('watermarkDiskUsage').innerHTML = '<span style="color:' + diskColor + '">' + esc(diskPct) + '%</span>';
+        document.getElementById('watermarkCurrent').textContent = watermark > 0 ? watermark + '%' : 'Disabled';
+        document.getElementById('watermarkInput').value = watermark;
+      } catch (e) {
+        document.getElementById('watermarkDiskUsage').textContent = 'Error';
+        document.getElementById('watermarkCurrent').textContent = 'Error';
+      }
+    }
+
+    async function saveWatermark() {
+      const value = parseInt(document.getElementById('watermarkInput').value);
+      if (isNaN(value) || value < 0 || value > 99) {
+        toast('Watermark must be 0-99 (0 = disabled)', 'error');
+        return;
+      }
+      try {
+        const luaScript = `
+local f = io.open("/var/lib/orthanc/storage-settings.json", "w")
+if not f then print("ERROR: Cannot write storage-settings.json"); return end
+f:write('{"watermarkPercent": ${value}}')
+f:close()
+print("OK")`;
+        const result = await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript.replace('${value}', value)
+        });
+        if (result.trim().startsWith('ERROR')) {
+          toast('Failed to save watermark: ' + result.trim(), 'error');
+          return;
+        }
+        toast('Storage watermark set to ' + (value > 0 ? value + '%' : 'disabled'), 'success');
+        loadWatermarkSettings();
+      } catch (e) {
+        toast('Failed to save watermark: ' + e.message, 'error');
+      }
+    }
+
+    async function saveDicomConfig() {
+      const aet = document.getElementById('settingAet').value.trim();
+      const port = document.getElementById('settingPort').value.trim();
+      if (!aet || !port) { toast('Please provide both AE Title and port', 'error'); return; }
+
+      // Use Lua to write the config values
+      const luaScript = `
+local f = io.open("/etc/orthanc/orthanc.json", "r")
+if not f then print("ERROR: Cannot read config"); return end
+local content = f:read("*a")
+f:close()
+
+-- Update DicomAet
+content = content:gsub('"DicomAet"%s*:%s*"[^"]*"', '"DicomAet": "${aet}"')
+-- Update DicomPort
+content = content:gsub('"DicomPort"%s*:%s*%d+', '"DicomPort": ${port}')
+
+local fw = io.open("/etc/orthanc/orthanc.json", "w")
+if not fw then print("ERROR: Cannot write config"); return end
+fw:write(content)
+fw:close()
+print("OK")`;
+
+      try {
+        const result = await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript.replace(/\${aet}/g, aet).replace(/\${port}/g, port)
+        });
+
+        if (result.trim().startsWith('ERROR')) {
+          toast('Failed to save config: ' + result.trim(), 'error');
+          return;
+        }
+
+        toast('DICOM config saved. Restart the Orthanc container for changes to take effect.', 'success');
+      } catch (e) {
+        toast('Failed to save config: ' + e.message, 'error');
+      }
+    }
+
+    async function setLogLevel() {
+      const level = document.getElementById('logLevelSelect').value;
+      try {
+        await fetch(API + '/tools/log-level', {
+          method: 'PUT',
+          headers: { 'Authorization': authHeader, 'Content-Type': 'text/plain' },
+          body: level
+        });
+        toast('Log level set to: ' + level, 'success');
+      } catch (e) { toast('Failed to set log level: ' + e.message, 'error'); }
+    }
+
+    async function reconstructIndex() {
+      if (!confirm('Reconstruct the main DICOM tags index?\n\nThis may take a while on large databases.')) return;
+      try {
+        toast('Reconstruction started...', 'info');
+        await api('/tools/reconstruct', { method: 'POST', body: '{}' });
+        toast('Reconstruction complete', 'success');
+      } catch (e) { toast('Reconstruction failed: ' + e.message, 'error'); }
+    }
+
+    async function clearChanges() {
+      if (!confirm('Clear ALL changes history?\n\nThis cannot be undone.')) return;
+      try {
+        await fetch(API + '/changes', { method: 'DELETE', headers: { 'Authorization': authHeader } });
+        toast('Changes history cleared', 'success');
+        loadChanges();
+      } catch (e) { toast('Failed to clear changes: ' + e.message, 'error'); }
+    }
+
+    // Close modals on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('active'); });
+    });
+  </script>
+  <footer class="site-footer">Developed by <a href="https://crowdit.com.au" target="_blank">Crowd IT</a></footer>
+</body>
+</html>

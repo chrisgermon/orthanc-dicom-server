@@ -1,0 +1,1756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crowd Image Management</title>
+  <link rel="icon" type="image/png" href="/manage/logo.png">
+  <style>
+    :root {
+      --purple-dark: #3a1f6e;
+      --purple: #5b2d8e;
+      --blue: #0077cc;
+      --blue-light: #00a3e0;
+      --bg: #0f1117;
+      --bg-card: #1a1d27;
+      --bg-card-hover: #222533;
+      --bg-input: #252836;
+      --text: #e8eaed;
+      --text-muted: #8b8fa3;
+      --text-dim: #5f6377;
+      --border: #2a2d3a;
+      --success: #34d399;
+      --danger: #f87171;
+      --warning: #fbbf24;
+      --gradient: linear-gradient(135deg, var(--purple) 0%, var(--blue) 100%);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .header-logo {
+      height: 56px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Navigation tabs */
+    .nav-tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--bg);
+      padding: 4px;
+      border-radius: 8px;
+    }
+
+    .nav-tab {
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .nav-tab:hover { color: var(--text); background: var(--bg-card); }
+    .nav-tab.active { color: #fff; background: var(--gradient); }
+
+    /* Status indicator */
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: var(--bg);
+      border-radius: 20px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.offline { background: var(--danger); animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Main layout */
+    .main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* Stats cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      transition: border-color 0.2s;
+    }
+
+    .stat-card:hover { border-color: var(--blue); }
+    .stat-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+    .stat-value { font-size: 28px; font-weight: 700; background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .stat-sub { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      flex: 1;
+      min-width: 250px;
+      position: relative;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 10px 16px 10px 40px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-box input:focus { border-color: var(--blue); }
+    .search-box input::placeholder { color: var(--text-dim); }
+
+    .search-box::before {
+      content: '\1F50D';
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 14px;
+      opacity: 0.5;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-card);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn:hover { background: var(--bg-card-hover); border-color: var(--text-dim); }
+    .btn-primary { background: var(--gradient); border-color: transparent; color: #fff; }
+    .btn-primary:hover { opacity: 0.9; background: var(--gradient); }
+    .btn-danger { color: var(--danger); }
+    .btn-danger:hover { background: rgba(248,113,113,0.1); border-color: var(--danger); }
+    .btn-success { color: var(--success); }
+    .btn-success:hover { background: rgba(52,211,153,0.1); border-color: var(--success); }
+    .btn-sm { padding: 6px 10px; font-size: 12px; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Table */
+    .table-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      background: rgba(0,0,0,0.2);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+      cursor: pointer;
+    }
+
+    thead th:hover { color: var(--text); }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--bg-card-hover); }
+
+    td {
+      padding: 12px 16px;
+      font-size: 13px;
+      vertical-align: middle;
+    }
+
+    .patient-name { font-weight: 600; color: var(--text); }
+    .study-desc { color: var(--text-muted); font-size: 12px; }
+    .modality-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      background: rgba(91,45,142,0.2);
+      color: var(--blue-light);
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .actions-cell {
+      display: flex;
+      gap: 4px;
+    }
+
+    /* Forwarding status */
+    tr.forwarded-success { background: rgba(52,211,153,0.06); }
+    tr.forwarded-success:hover { background: rgba(52,211,153,0.10); }
+    tr.forwarded-running { background: rgba(251,191,36,0.05); }
+    tr.forwarded-running:hover { background: rgba(251,191,36,0.08); }
+    tr.forwarded-failure { background: rgba(248,113,113,0.05); }
+    tr.forwarded-failure:hover { background: rgba(248,113,113,0.08); }
+
+    .fwd-icon {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+    .fwd-icon.success { color: var(--success); background: rgba(52,211,153,0.12); }
+    .fwd-icon.running { color: var(--warning); background: rgba(251,191,36,0.12); }
+    .fwd-icon.failure { color: var(--danger); background: rgba(248,113,113,0.12); }
+    .fwd-icon.pending { color: var(--blue-light); background: rgba(0,163,224,0.12); }
+
+    /* Inline send progress bar (under patient name) */
+    .send-progress {
+      margin-top: 4px;
+      height: 3px;
+      background: var(--bg-input);
+      border-radius: 2px;
+      overflow: hidden;
+      max-width: 180px;
+    }
+    .send-progress .bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--blue) 0%, var(--blue-light) 100%);
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+    .send-progress .bar.indeterminate {
+      width: 40%;
+      animation: sendPulse 1.2s ease-in-out infinite;
+    }
+    @keyframes sendPulse {
+      0% { margin-left: 0; }
+      50% { margin-left: 60%; }
+      100% { margin-left: 0; }
+    }
+
+    /* Checkbox */
+    .checkbox {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--blue);
+      cursor: pointer;
+    }
+
+    /* Section panels */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.active { display: flex; }
+
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      width: 90%;
+      max-width: 520px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+
+    .form-group input:focus, .form-group select:focus {
+      border-color: var(--blue);
+    }
+
+    /* Upload area */
+    .upload-area {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 48px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .upload-area:hover, .upload-area.dragover {
+      border-color: var(--blue);
+      background: rgba(0,119,204,0.05);
+    }
+
+    .upload-area .icon { font-size: 48px; margin-bottom: 12px; }
+    .upload-area .title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .upload-area .sub { font-size: 13px; color: var(--text-muted); }
+
+    .upload-progress {
+      margin-top: 16px;
+    }
+
+    .progress-bar {
+      height: 4px;
+      background: var(--bg-input);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .progress-bar .fill {
+      height: 100%;
+      background: var(--gradient);
+      border-radius: 2px;
+      transition: width 0.3s;
+    }
+
+    /* Modality config cards */
+    .modality-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modality-info h3 { font-size: 15px; font-weight: 600; }
+    .modality-info p { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    /* Toast notifications */
+    .toast-container {
+      position: fixed;
+      top: 96px;
+      right: 24px;
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      animation: slideIn 0.3s ease;
+      min-width: 280px;
+    }
+
+    .toast.success { background: rgba(52,211,153,0.15); border: 1px solid var(--success); color: var(--success); }
+    .toast.error { background: rgba(248,113,113,0.15); border: 1px solid var(--danger); color: var(--danger); }
+    .toast.info { background: rgba(0,163,224,0.15); border: 1px solid var(--blue-light); color: var(--blue-light); }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 64px 24px;
+      color: var(--text-muted);
+    }
+
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+    .empty-state h3 { font-size: 16px; color: var(--text); margin-bottom: 4px; }
+    .empty-state p { font-size: 13px; }
+
+    /* Jobs panel */
+    .job-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .job-type { font-weight: 600; font-size: 13px; }
+    .job-detail { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+    .job-duration { font-size: 12px; color: var(--text-muted); margin-right: 12px; }
+    .job-status { font-size: 12px; padding: 3px 8px; border-radius: 4px; }
+    .job-status.running { background: rgba(251,191,36,0.15); color: var(--warning); }
+    .job-status.success { background: rgba(52,211,153,0.15); color: var(--success); }
+    .job-status.failure { background: rgba(248,113,113,0.15); color: var(--danger); }
+    .job-status.pending { background: rgba(0,163,224,0.15); color: var(--blue-light); }
+    .job-status.paused { background: rgba(139,143,163,0.15); color: var(--text-muted); }
+
+    /* Report cards */
+    .report-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .report-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      transition: border-color 0.2s;
+    }
+    .report-card:hover { border-color: var(--blue); }
+    .report-card .rc-value {
+      font-size: 32px;
+      font-weight: 700;
+      background: var(--gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .report-card .rc-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+    .report-card.success-rate .rc-value {
+      background: linear-gradient(135deg, var(--success) 0%, #10b981 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+
+    .source-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .source-badge.auto { background: rgba(91,45,142,0.2); color: #b794f4; }
+    .source-badge.manual { background: rgba(0,163,224,0.15); color: var(--blue-light); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .header { padding: 0 12px; }
+      .main { padding: 16px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .toolbar { flex-direction: column; }
+      .search-box { min-width: auto; width: 100%; }
+      .actions-cell { flex-wrap: wrap; }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+    /* Footer */
+    .site-footer {
+      text-align: center;
+      padding: 24px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .site-footer a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .site-footer a:hover { color: var(--blue-light); }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <span style="color:#fff;font-size:22px;font-weight:700;letter-spacing:0.5px;">Image Management</span>
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-section="studies">Studies</button>
+        <button class="nav-tab" data-section="upload">Upload</button>
+        <button class="nav-tab" data-section="modalities">Modalities</button>
+        <button class="nav-tab" data-section="jobs">Jobs</button>
+        <button class="nav-tab" data-section="reports">Reports</button>
+      </nav>
+    </div>
+    <div class="header-right">
+      <div class="status-badge">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Connecting...</span>
+      </div>
+      <a href="/admin" class="btn btn-sm">Admin</a>
+      <a href="/orthanc/app/explorer.html" target="_blank" class="btn btn-sm">Orthanc Explorer</a>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main">
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Patients</div>
+        <div class="stat-value" id="statPatients">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Studies</div>
+        <div class="stat-value" id="statStudies">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Series</div>
+        <div class="stat-value" id="statSeries">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Instances</div>
+        <div class="stat-value" id="statInstances">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Disk Usage</div>
+        <div class="stat-value" id="statDisk">-</div>
+        <div class="stat-sub" id="statDiskSub"></div>
+      </div>
+    </div>
+
+    <!-- Studies Section -->
+    <section class="section active" id="sec-studies">
+      <div class="toolbar">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="Search by patient name, ID, accession, description...">
+        </div>
+        <button class="btn" id="btnRefresh" onclick="loadStudies()">Refresh</button>
+        <button class="btn btn-success" id="btnSendSelected" onclick="sendSelectedStudies()" disabled>Send Selected</button>
+        <button class="btn btn-danger" id="btnDeleteSelected" onclick="deleteSelectedStudies()" disabled>Delete Selected</button>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:40px"><input type="checkbox" class="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+              <th>Patient</th>
+              <th>Study Date</th>
+              <th>Description</th>
+              <th>Modality</th>
+              <th>Accession</th>
+              <th>Series</th>
+              <th>Images</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="studiesBody">
+          </tbody>
+        </table>
+        <div class="empty-state" id="emptyStudies" style="display:none;">
+          <div class="icon">&#128203;</div>
+          <h3>No studies found</h3>
+          <p>Studies received via DICOM or uploaded will appear here.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Upload Section -->
+    <section class="section" id="sec-upload">
+      <div class="section-header">
+        <h2 class="section-title">Upload DICOM Files</h2>
+      </div>
+      <div class="upload-area" id="uploadArea">
+        <div class="icon">&#128228;</div>
+        <div class="title">Drop files, folders, or ZIP archives here</div>
+        <div class="sub">Supports .dcm files, .zip archives containing DICOM, and folders with nested subfolders</div>
+        <input type="file" id="fileInput" multiple accept=".dcm,.DCM,.zip,.ZIP,application/dicom,application/zip" style="display:none">
+        <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:center;">
+        <button class="btn" id="btnBrowseFiles" onclick="document.getElementById('fileInput').click()">Browse Files</button>
+        <button class="btn" id="btnBrowseFolder" onclick="document.getElementById('folderInput').click()">Browse Folder</button>
+      </div>
+      <div class="upload-progress" id="uploadProgress" style="display:none;">
+        <div style="display:flex;justify-content:space-between;font-size:13px;">
+          <span id="uploadStatus">Uploading...</span>
+          <span id="uploadCount">0/0</span>
+        </div>
+        <div class="progress-bar"><div class="fill" id="uploadFill" style="width:0%"></div></div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:6px;" id="uploadDetail"></div>
+      </div>
+    </section>
+
+    <!-- Modalities Section -->
+    <section class="section" id="sec-modalities">
+      <div class="section-header">
+        <h2 class="section-title">DICOM Modalities</h2>
+        <button class="btn" onclick="loadModalities()">Refresh</button>
+      </div>
+      <div id="modalitiesList"></div>
+      <div class="empty-state" id="emptyModalities" style="display:none;">
+        <div class="icon">&#128225;</div>
+        <h3>No modalities configured</h3>
+        <p>Configure modalities in orthanc.json</p>
+      </div>
+    </section>
+
+    <!-- Jobs Section -->
+    <section class="section" id="sec-jobs">
+      <div class="section-header">
+        <h2 class="section-title">Jobs</h2>
+        <button class="btn" onclick="loadJobs()">Refresh</button>
+      </div>
+      <div id="jobsList"></div>
+      <div class="empty-state" id="emptyJobs" style="display:none;">
+        <div class="icon">&#9881;</div>
+        <h3>No recent jobs</h3>
+        <p>Send, modify, and other operations will show here.</p>
+      </div>
+    </section>
+
+    <!-- Reports Section -->
+    <section class="section" id="sec-reports">
+      <div class="section-header">
+        <h2 class="section-title">Reports</h2>
+        <button class="btn" onclick="loadReports()">Refresh</button>
+      </div>
+      <div class="report-cards">
+        <div class="report-card">
+          <div class="rc-value" id="rptTotal">-</div>
+          <div class="rc-label">Total Sent</div>
+        </div>
+        <div class="report-card">
+          <div class="rc-value" id="rptAuto">-</div>
+          <div class="rc-label">Auto-Routed</div>
+        </div>
+        <div class="report-card">
+          <div class="rc-value" id="rptManual">-</div>
+          <div class="rc-label">Manual Sends</div>
+        </div>
+        <div class="report-card">
+          <div class="rc-value" id="rptFailed">-</div>
+          <div class="rc-label">Failed</div>
+        </div>
+        <div class="report-card success-rate">
+          <div class="rc-value" id="rptSuccessRate">-</div>
+          <div class="rc-label">Success Rate</div>
+        </div>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Patient</th>
+              <th>Destination</th>
+              <th>Source</th>
+              <th>Duration</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="reportBody"></tbody>
+        </table>
+        <div class="empty-state" id="emptyReports" style="display:none;">
+          <div class="icon">&#128202;</div>
+          <h3>No routing history</h3>
+          <p>Studies sent manually or via auto-routing will appear here.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">Developed by <a href="https://crowdit.com.au" target="_blank">Crowd IT</a></footer>
+
+  <!-- Send Modal -->
+  <div class="modal-overlay" id="sendModal">
+    <div class="modal">
+      <div class="modal-title">Send Study</div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;" id="sendModalInfo"></p>
+      <div class="form-group">
+        <label>Destination Modality</label>
+        <select id="sendModality"></select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeSendModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmSend()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modify Modal -->
+  <div class="modal-overlay" id="modifyModal">
+    <div class="modal">
+      <div class="modal-title">Modify Study</div>
+      <div class="form-group">
+        <label>Patient Name</label>
+        <input type="text" id="modPatientName">
+      </div>
+      <div class="form-group">
+        <label>Patient ID</label>
+        <input type="text" id="modPatientId">
+      </div>
+      <div class="form-group">
+        <label>Study Description</label>
+        <input type="text" id="modStudyDesc">
+      </div>
+      <div class="form-group">
+        <label>Accession Number</label>
+        <input type="text" id="modAccession">
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="closeModifyModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmModify()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toasts"></div>
+
+  <script>
+    const API = '/orthanc';
+    let studies = [];
+    let selectedStudies = new Set();
+    let currentSendStudy = null;
+    let currentModifyStudy = null;
+    let modalities = {};
+    let searchTimeout = null;
+    let studyJobMap = {}; // studyId -> { state, destination, progress }
+
+    // Navigation
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('sec-' + tab.dataset.section).classList.add('active');
+
+        if (tab.dataset.section === 'modalities') loadModalities();
+        if (tab.dataset.section === 'jobs') loadJobs();
+        if (tab.dataset.section === 'reports') loadReports();
+      });
+    });
+
+    // Toast
+    function toast(message, type = 'info') {
+      const el = document.createElement('div');
+      el.className = 'toast ' + type;
+      el.textContent = message;
+      document.getElementById('toasts').appendChild(el);
+      setTimeout(() => el.remove(), 4000);
+    }
+
+    // API helper
+    async function api(path, options = {}) {
+      const mergedHeaders = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+      const res = await fetch(API + path, { ...options, headers: mergedHeaders });
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
+    }
+
+    // Load stats
+    async function loadStats() {
+      try {
+        const stats = await api('/statistics');
+        document.getElementById('statPatients').textContent = stats.CountPatients.toLocaleString();
+        document.getElementById('statStudies').textContent = stats.CountStudies.toLocaleString();
+        document.getElementById('statSeries').textContent = stats.CountSeries.toLocaleString();
+        document.getElementById('statInstances').textContent = stats.CountInstances.toLocaleString();
+
+        const mb = stats.TotalDiskSizeMB || (stats.TotalDiskSize / 1048576);
+        if (mb > 1024) {
+          document.getElementById('statDisk').textContent = (mb / 1024).toFixed(1) + ' GB';
+        } else {
+          document.getElementById('statDisk').textContent = mb.toFixed(0) + ' MB';
+        }
+
+        document.getElementById('statusDot').classList.remove('offline');
+        document.getElementById('statusText').textContent = 'Online';
+      } catch (e) {
+        document.getElementById('statusDot').classList.add('offline');
+        document.getElementById('statusText').textContent = 'Offline';
+      }
+    }
+
+    // Load studies
+    async function loadStudies() {
+      try {
+        const searchQuery = document.getElementById('searchInput').value.trim();
+        let query = {};
+        if (searchQuery) {
+          query = {
+            PatientName: '*' + searchQuery + '*',
+            PatientID: '*' + searchQuery + '*',
+            StudyDescription: '*' + searchQuery + '*',
+            AccessionNumber: '*' + searchQuery + '*'
+          };
+        }
+
+        const data = await api('/tools/find', {
+          method: 'POST',
+          body: JSON.stringify({
+            Level: 'Study',
+            Query: query,
+            Expand: true,
+            CaseSensitive: false,
+            RequestedTags: ['ModalitiesInStudy', 'NumberOfStudyRelatedInstances', 'NumberOfStudyRelatedSeries']
+          })
+        });
+
+        studies = data.sort((a, b) => {
+          const dateA = a.MainDicomTags?.StudyDate || '';
+          const dateB = b.MainDicomTags?.StudyDate || '';
+          return dateB.localeCompare(dateA);
+        });
+
+        await loadStudyJobs();
+        renderStudies();
+      } catch (e) {
+        toast('Failed to load studies: ' + e.message, 'error');
+      }
+    }
+
+    // Build a map of study ID -> most relevant forwarding job status
+    async function loadStudyJobs() {
+      try {
+        const jobs = await api('/jobs?expand');
+        studyJobMap = {};
+        if (!jobs || !jobs.length) return;
+
+        // Only look at DicomModalityStore jobs
+        const storeJobs = jobs.filter(j => j.Type === 'DicomModalityStore');
+
+        for (const j of storeJobs) {
+          const resources = j.Content?.ParentResources || [];
+          const dest = j.Content?.RemoteAet || '';
+          for (const studyId of resources) {
+            const existing = studyJobMap[studyId];
+            // Active jobs always win over completed; among completed, Success > Failure
+            const priority = { Running: 5, Pending: 4, Retry: 4, Paused: 3, Success: 2, Failure: 1 };
+            const newP = priority[j.State] ?? 0;
+            const oldP = existing ? (priority[existing.state] ?? -1) : -1;
+            if (newP > oldP) {
+              studyJobMap[studyId] = {
+                state: j.State,
+                destination: dest,
+                progress: j.Progress,
+                instances: j.Content?.InstancesCount || 0,
+                time: j.CompletionTime || j.CreationTime || ''
+              };
+            }
+          }
+        }
+      } catch (e) {
+        // Non-critical, just skip
+      }
+    }
+
+    function renderStudies() {
+      const tbody = document.getElementById('studiesBody');
+      const empty = document.getElementById('emptyStudies');
+
+      if (studies.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+      }
+
+      empty.style.display = 'none';
+      tbody.innerHTML = studies.map(s => {
+        const t = s.MainDicomTags || {};
+        const rt = s.RequestedTags || {};
+        const ps = s.PatientMainDicomTags || {};
+        const date = formatDate(t.StudyDate);
+        const modality = rt.ModalitiesInStudy || t.ModalitiesInStudy || '';
+        const numSeries = rt.NumberOfStudyRelatedSeries || (s.Series || []).length;
+        const numInstances = rt.NumberOfStudyRelatedInstances || '-';
+        const checked = selectedStudies.has(s.ID) ? 'checked' : '';
+
+        const job = studyJobMap[s.ID];
+        let rowClass = '';
+        let fwdIcon = '';
+        if (job) {
+          const st = job.state;
+          if (st === 'Success') {
+            rowClass = 'forwarded-success';
+            const sentTime = formatJobTime(job.time);
+            fwdIcon = `<span class="fwd-icon success" title="Sent to ${escHtml(job.destination)}${sentTime ? ' on ' + sentTime : ''}">&#10003; Sent</span>`;
+          } else if (st === 'Running') {
+            rowClass = 'forwarded-running';
+            const pct = job.progress || 0;
+            fwdIcon = `<span class="fwd-icon running" title="Sending ${job.instances || ''} images to ${escHtml(job.destination)} (${pct}%)">&#8635; ${pct}%</span>`;
+          } else if (st === 'Failure') {
+            rowClass = 'forwarded-failure';
+            const failTime = formatJobTime(job.time);
+            fwdIcon = `<span class="fwd-icon failure" title="Failed to send to ${escHtml(job.destination)}${failTime ? ' on ' + failTime : ''}">&#10007; Failed</span>`;
+          } else if (st === 'Pending' || st === 'Retry') {
+            rowClass = 'forwarded-running';
+            fwdIcon = `<span class="fwd-icon pending" title="Queued for ${escHtml(job.destination)}">&#8987; Queued</span>`;
+          } else if (st === 'Paused') {
+            fwdIcon = `<span class="fwd-icon pending" title="Paused sending to ${escHtml(job.destination)}">&#9208; Paused</span>`;
+          }
+        }
+
+        let progressBar = '';
+        if (job && (job.state === 'Running' || job.state === 'Pending' || job.state === 'Retry')) {
+          const pct = job.progress || 0;
+          if (pct > 0 && pct < 100) {
+            progressBar = `<div class="send-progress"><div class="bar" style="width:${pct}%"></div></div>`;
+          } else {
+            progressBar = `<div class="send-progress"><div class="bar indeterminate"></div></div>`;
+          }
+        }
+
+        return `<tr class="${rowClass}">
+          <td><input type="checkbox" class="checkbox" ${checked} onchange="toggleStudy('${s.ID}', this.checked)"></td>
+          <td>
+            <div class="patient-name">${escHtml(ps.PatientName || 'Unknown')}${fwdIcon}</div>
+            <div class="study-desc">${escHtml(ps.PatientID || '')}</div>
+            ${progressBar}
+          </td>
+          <td>${date}</td>
+          <td class="study-desc">${escHtml(t.StudyDescription || '-')}</td>
+          <td>${modality.split('\\').map(m => '<span class="modality-badge">' + escHtml(m) + '</span>').join(' ')}</td>
+          <td style="font-size:12px;color:var(--text-muted)">${escHtml(t.AccessionNumber || '-')}</td>
+          <td>${numSeries}</td>
+          <td>${numInstances}</td>
+          <td>
+            <div class="actions-cell">
+              <button class="btn btn-sm" onclick="viewStudy('${s.ID}')" title="Open in OHIF Viewer">View</button>
+              <button class="btn btn-sm btn-success" onclick="openSendModal('${s.ID}')" title="Send to modality">Send</button>
+              <button class="btn btn-sm" onclick="openModifyModal('${s.ID}')" title="Edit patient/study info">Edit</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteStudy('${s.ID}')" title="Delete study">Del</button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function formatDate(d) {
+      if (!d || d.length !== 8) return d || '-';
+      return d.slice(0,4) + '-' + d.slice(4,6) + '-' + d.slice(6,8);
+    }
+
+    function formatJobTime(t) {
+      if (!t) return '';
+      // Orthanc format: "20260221T143052.123" or ISO "2026-02-21T14:30:52"
+      try {
+        const iso = t.includes('-') ? t : t.slice(0,4)+'-'+t.slice(4,6)+'-'+t.slice(6,8)+'T'+t.slice(9,11)+':'+t.slice(11,13)+':'+t.slice(13,15);
+        const d = new Date(iso);
+        if (isNaN(d)) return t;
+        return d.toLocaleString();
+      } catch (e) { return t; }
+    }
+
+    function escHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    // Selection
+    function toggleStudy(id, checked) {
+      if (checked) selectedStudies.add(id);
+      else selectedStudies.delete(id);
+      updateBulkButtons();
+    }
+
+    function toggleSelectAll() {
+      const checked = document.getElementById('selectAll').checked;
+      selectedStudies.clear();
+      if (checked) studies.forEach(s => selectedStudies.add(s.ID));
+      renderStudies();
+      updateBulkButtons();
+    }
+
+    function updateBulkButtons() {
+      const n = selectedStudies.size;
+      document.getElementById('btnSendSelected').disabled = n === 0;
+      document.getElementById('btnDeleteSelected').disabled = n === 0;
+      document.getElementById('btnSendSelected').textContent = n > 0 ? `Send Selected (${n})` : 'Send Selected';
+      document.getElementById('btnDeleteSelected').textContent = n > 0 ? `Delete Selected (${n})` : 'Delete Selected';
+    }
+
+    // View in OHIF
+    function viewStudy(id) {
+      const study = studies.find(s => s.ID === id);
+      if (study) {
+        const uid = study.MainDicomTags?.StudyInstanceUID;
+        if (uid) {
+          window.open('/viewer?StudyInstanceUIDs=' + uid, '_blank');
+          return;
+        }
+      }
+      toast('Could not determine Study Instance UID', 'error');
+    }
+
+    // Send modal
+    async function openSendModal(studyId) {
+      currentSendStudy = [studyId];
+      const study = studies.find(s => s.ID === studyId);
+      const name = study?.PatientMainDicomTags?.PatientName || 'Unknown';
+      document.getElementById('sendModalInfo').textContent = `Sending: ${name}`;
+      await populateModalitySelect();
+      document.getElementById('sendModal').classList.add('active');
+    }
+
+    async function sendSelectedStudies() {
+      currentSendStudy = Array.from(selectedStudies);
+      document.getElementById('sendModalInfo').textContent = `Sending ${currentSendStudy.length} study(ies)`;
+      await populateModalitySelect();
+      document.getElementById('sendModal').classList.add('active');
+    }
+
+    function closeSendModal() {
+      document.getElementById('sendModal').classList.remove('active');
+      currentSendStudy = null;
+    }
+
+    async function populateModalitySelect() {
+      try {
+        modalities = await api('/modalities?expand');
+        const sel = document.getElementById('sendModality');
+        sel.innerHTML = Object.entries(modalities).map(([name, config]) =>
+          `<option value="${name}">${name} (${config.AET || config[0]} @ ${config.Host || config[1]}:${config.Port || config[2]})</option>`
+        ).join('');
+      } catch (e) {
+        toast('Failed to load modalities', 'error');
+      }
+    }
+
+    async function confirmSend() {
+      const target = document.getElementById('sendModality').value;
+      if (!target || !currentSendStudy) return;
+      const sendIds = [...currentSendStudy];
+      closeSendModal();
+
+      // Immediately show sending state in the UI
+      const modalityInfo = modalities[target] || {};
+      const remoteAet = modalityInfo.AET || target;
+      for (const studyId of sendIds) {
+        studyJobMap[studyId] = { state: 'Running', destination: remoteAet, progress: 0 };
+      }
+      renderStudies();
+
+      // Fire off the actual API calls
+      for (const studyId of sendIds) {
+        try {
+          await api('/modalities/' + target + '/store', {
+            method: 'POST',
+            body: JSON.stringify({ Resources: [studyId], Synchronous: false })
+          });
+          toast(`Study queued for sending to ${target}`, 'success');
+        } catch (e) {
+          studyJobMap[studyId] = { state: 'Failure', destination: remoteAet, progress: 0 };
+          toast(`Failed to send study: ${e.message}`, 'error');
+        }
+      }
+      selectedStudies.clear();
+      updateBulkButtons();
+      // Start polling for real job progress
+      startJobPolling();
+    }
+
+    // Always-on background polling: 5s idle, 2s when active jobs detected
+    let bgPollTimer = null;
+    let bgPollInterval = 5000;
+
+    function startBackgroundPolling() {
+      if (bgPollTimer) return; // already running
+      scheduleBgPoll();
+    }
+
+    function scheduleBgPoll() {
+      bgPollTimer = setTimeout(async () => {
+        await loadStudyJobs();
+        renderStudies();
+        const hasActive = Object.values(studyJobMap).some(j =>
+          j.state === 'Running' || j.state === 'Pending' || j.state === 'Retry'
+        );
+        bgPollInterval = hasActive ? 2000 : 5000;
+        scheduleBgPoll();
+      }, bgPollInterval);
+    }
+
+    // Kick polling to fast mode after a manual send
+    function startJobPolling() {
+      bgPollInterval = 1000; // next tick will be fast
+    }
+
+    // Delete
+    async function deleteStudy(id) {
+      const study = studies.find(s => s.ID === id);
+      const name = study?.PatientMainDicomTags?.PatientName || 'Unknown';
+      if (!confirm(`Delete study for "${name}"?\n\nThis cannot be undone.`)) return;
+
+      try {
+        await fetch(API + '/studies/' + id, { method: 'DELETE' });
+        toast('Study deleted', 'success');
+        studies = studies.filter(s => s.ID !== id);
+        selectedStudies.delete(id);
+        renderStudies();
+        updateBulkButtons();
+        loadStats();
+      } catch (e) {
+        toast('Failed to delete study: ' + e.message, 'error');
+      }
+    }
+
+    async function deleteSelectedStudies() {
+      const n = selectedStudies.size;
+      if (!confirm(`Delete ${n} selected study(ies)?\n\nThis cannot be undone.`)) return;
+
+      let deleted = 0;
+      for (const id of selectedStudies) {
+        try {
+          await fetch(API + '/studies/' + id, { method: 'DELETE' });
+          deleted++;
+        } catch (e) { /* continue */ }
+      }
+      toast(`Deleted ${deleted} of ${n} studies`, 'success');
+      selectedStudies.clear();
+      loadStudies();
+      loadStats();
+    }
+
+    // Modify modal
+    async function openModifyModal(studyId) {
+      currentModifyStudy = studyId;
+      const study = studies.find(s => s.ID === studyId);
+      const t = study?.MainDicomTags || {};
+      const p = study?.PatientMainDicomTags || {};
+
+      document.getElementById('modPatientName').value = p.PatientName || '';
+      document.getElementById('modPatientId').value = p.PatientID || '';
+      document.getElementById('modStudyDesc').value = t.StudyDescription || '';
+      document.getElementById('modAccession').value = t.AccessionNumber || '';
+      document.getElementById('modifyModal').classList.add('active');
+    }
+
+    function closeModifyModal() {
+      document.getElementById('modifyModal').classList.remove('active');
+      currentModifyStudy = null;
+    }
+
+    async function confirmModify() {
+      if (!currentModifyStudy) return;
+
+      const replace = {};
+      const name = document.getElementById('modPatientName').value.trim();
+      const pid = document.getElementById('modPatientId').value.trim();
+      const desc = document.getElementById('modStudyDesc').value.trim();
+      const acc = document.getElementById('modAccession').value.trim();
+
+      if (name) replace.PatientName = name;
+      if (pid) replace.PatientID = pid;
+      if (desc) replace.StudyDescription = desc;
+      if (acc) replace.AccessionNumber = acc;
+
+      closeModifyModal();
+
+      try {
+        await api('/studies/' + currentModifyStudy + '/modify', {
+          method: 'POST',
+          body: JSON.stringify({ Replace: replace, Force: true, KeepSource: false })
+        });
+        toast('Study modified successfully', 'success');
+        loadStudies();
+        loadStats();
+      } catch (e) {
+        toast('Failed to modify study: ' + e.message, 'error');
+      }
+    }
+
+    // Upload - supports files, folders (recursive), and ZIP archives
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const folderInput = document.getElementById('folderInput');
+
+    // Click upload area opens file picker
+    uploadArea.addEventListener('click', () => fileInput.click());
+    uploadArea.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); uploadArea.classList.add('dragover'); });
+    uploadArea.addEventListener('dragleave', e => { e.preventDefault(); uploadArea.classList.remove('dragover'); });
+
+    // Drop handler - supports files, folders, and ZIPs
+    uploadArea.addEventListener('drop', async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      uploadArea.classList.remove('dragover');
+
+      const items = e.dataTransfer.items;
+      if (items && items.length > 0 && items[0].webkitGetAsEntry) {
+        // Use FileSystem API for folder traversal
+        const allFiles = [];
+        const entries = [];
+        for (let i = 0; i < items.length; i++) {
+          const entry = items[i].webkitGetAsEntry();
+          if (entry) entries.push(entry);
+        }
+        await collectFilesFromEntries(entries, allFiles);
+        await processCollectedFiles(allFiles);
+      } else {
+        // Fallback: plain file list
+        await processCollectedFiles(Array.from(e.dataTransfer.files));
+      }
+    });
+
+    // File input change (Browse Files button)
+    fileInput.addEventListener('change', async e => {
+      await processCollectedFiles(Array.from(e.target.files));
+      fileInput.value = '';
+    });
+
+    // Folder input change (Browse Folder button)
+    folderInput.addEventListener('change', async e => {
+      await processCollectedFiles(Array.from(e.target.files));
+      folderInput.value = '';
+    });
+
+    // Recursively collect files from drag-and-drop entries
+    async function collectFilesFromEntries(entries, result) {
+      for (const entry of entries) {
+        if (entry.isFile) {
+          const file = await new Promise(resolve => entry.file(resolve));
+          result.push(file);
+        } else if (entry.isDirectory) {
+          const reader = entry.createReader();
+          let batch;
+          do {
+            batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+            await collectFilesFromEntries(batch, result);
+          } while (batch.length > 0);
+        }
+      }
+    }
+
+    // Process collected files: separate ZIPs from DICOM, extract ZIPs, upload all
+    async function processCollectedFiles(files) {
+      if (!files.length) return;
+
+      const prog = document.getElementById('uploadProgress');
+      const status = document.getElementById('uploadStatus');
+      const count = document.getElementById('uploadCount');
+      const fill = document.getElementById('uploadFill');
+      const detail = document.getElementById('uploadDetail');
+
+      prog.style.display = 'block';
+      detail.textContent = '';
+      status.textContent = 'Scanning files...';
+      count.textContent = '';
+      fill.style.width = '0%';
+
+      // Separate ZIPs from other files
+      const zipFiles = [];
+      const dicomFiles = [];
+      for (const file of files) {
+        const name = file.name.toLowerCase();
+        if (name.endsWith('.zip')) {
+          zipFiles.push(file);
+        } else {
+          dicomFiles.push(file);
+        }
+      }
+
+      // Extract DICOM files from ZIPs
+      if (zipFiles.length > 0) {
+        status.textContent = `Extracting ${zipFiles.length} ZIP file(s)...`;
+        for (const zipFile of zipFiles) {
+          try {
+            detail.textContent = `Extracting ${zipFile.name}...`;
+            const extracted = await extractDicomFromZip(zipFile);
+            dicomFiles.push(...extracted);
+            detail.textContent = `Extracted ${extracted.length} files from ${zipFile.name}`;
+          } catch (e) {
+            toast(`Failed to extract ${zipFile.name}: ${e.message}`, 'error');
+          }
+        }
+      }
+
+      // Filter to likely DICOM files
+      const toUpload = dicomFiles.filter(f => isDicomCandidate(f));
+
+      if (toUpload.length === 0) {
+        status.textContent = 'No DICOM files found';
+        toast('No DICOM files found in the selected items', 'error');
+        setTimeout(() => { prog.style.display = 'none'; }, 3000);
+        return;
+      }
+
+      status.textContent = `Uploading ${toUpload.length} file(s)...`;
+      let uploaded = 0;
+      let skipped = 0;
+
+      for (const file of toUpload) {
+        try {
+          const displayName = file._zipPath || file.webkitRelativePath || file.name;
+          count.textContent = `${uploaded + skipped}/${toUpload.length}`;
+          detail.textContent = displayName;
+          fill.style.width = (((uploaded + skipped) / toUpload.length) * 100) + '%';
+
+          const res = await fetch(API + '/instances', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/dicom' },
+            body: file
+          });
+
+          if (res.ok) {
+            const json = await res.json();
+            if (json.Status === 'Success' || json.Status === 'AlreadyStored') {
+              uploaded++;
+            } else {
+              skipped++;
+            }
+          } else {
+            skipped++;
+          }
+        } catch (e) {
+          skipped++;
+        }
+      }
+
+      fill.style.width = '100%';
+      count.textContent = `${uploaded + skipped}/${toUpload.length}`;
+      const msg = `Uploaded ${uploaded} DICOM file(s)` + (skipped > 0 ? `, ${skipped} skipped` : '');
+      status.textContent = msg;
+      detail.textContent = '';
+      toast(msg, uploaded > 0 ? 'success' : 'info');
+
+      setTimeout(() => { prog.style.display = 'none'; fill.style.width = '0%'; }, 4000);
+      loadStudies();
+      loadStats();
+    }
+
+    // Check if a file is likely DICOM
+    function isDicomCandidate(file) {
+      const name = file.name.toLowerCase();
+      // Accept .dcm files
+      if (name.endsWith('.dcm')) return true;
+      // Accept files without extension (common for DICOM)
+      if (!name.includes('.') || name.lastIndexOf('.') === 0) return true;
+      // Accept common DICOM-related extensions
+      if (name.endsWith('.ima') || name.endsWith('.img')) return true;
+      // Skip obviously non-DICOM files
+      const skip = ['.zip','.txt','.xml','.json','.html','.htm','.pdf','.jpg','.jpeg','.png','.gif','.bmp','.csv','.log','.md','.ds_store','.ini','.cfg','.exe','.dll','.so','.dylib'];
+      for (const ext of skip) {
+        if (name.endsWith(ext)) return false;
+      }
+      // Accept anything else (DICOM files often have no extension or numeric extensions)
+      return true;
+    }
+
+    // Extract files from a ZIP using JSZip (loaded dynamically)
+    async function extractDicomFromZip(zipFile) {
+      // Load JSZip if not already loaded
+      if (typeof JSZip === 'undefined') {
+        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+      }
+
+      const zip = await JSZip.loadAsync(zipFile);
+      const files = [];
+
+      for (const [path, entry] of Object.entries(zip.files)) {
+        if (entry.dir) continue;
+        // Skip hidden/system files
+        const name = path.split('/').pop();
+        if (name.startsWith('.') || name.startsWith('__')) continue;
+
+        const blob = await entry.async('blob');
+        const file = new File([blob], name, { type: 'application/dicom' });
+        file._zipPath = path; // Store original zip path for display
+        if (isDicomCandidate(file)) {
+          files.push(file);
+        }
+      }
+      return files;
+    }
+
+    function loadScript(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('Failed to load ' + src));
+        document.head.appendChild(s);
+      });
+    }
+
+    // Modalities
+    async function loadModalities() {
+      try {
+        modalities = await api('/modalities?expand');
+        const list = document.getElementById('modalitiesList');
+        const empty = document.getElementById('emptyModalities');
+        const entries = Object.entries(modalities);
+
+        if (entries.length === 0) {
+          list.innerHTML = '';
+          empty.style.display = 'block';
+          return;
+        }
+
+        empty.style.display = 'none';
+        list.innerHTML = entries.map(([name, config]) => {
+          const aet = config.AET || config[0] || '?';
+          const host = config.Host || config[1] || '?';
+          const port = config.Port || config[2] || '?';
+          return `<div class="modality-card">
+            <div class="modality-info">
+              <h3>${escHtml(name)}</h3>
+              <p>AET: ${escHtml(aet)} &middot; ${escHtml(host)}:${port}</p>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-sm" onclick="echoModality('${name}')">Echo</button>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        toast('Failed to load modalities', 'error');
+      }
+    }
+
+    async function echoModality(name) {
+      try {
+        await api('/modalities/' + name + '/echo', { method: 'POST' });
+        toast(`C-ECHO to ${name}: Success`, 'success');
+      } catch (e) {
+        toast(`C-ECHO to ${name}: Failed`, 'error');
+      }
+    }
+
+    // Format seconds to human-readable duration
+    function formatDuration(seconds) {
+      if (seconds == null || seconds < 0) return '-';
+      if (seconds < 1) return seconds.toFixed(1) + 's';
+      if (seconds < 60) return Math.round(seconds) + 's';
+      if (seconds < 3600) {
+        const m = Math.floor(seconds / 60);
+        const s = Math.round(seconds % 60);
+        return s > 0 ? m + 'm ' + s + 's' : m + 'm';
+      }
+      const h = Math.floor(seconds / 3600);
+      const m = Math.round((seconds % 3600) / 60);
+      return m > 0 ? h + 'h ' + m + 'm' : h + 'h';
+    }
+
+    // Jobs
+    async function loadJobs() {
+      try {
+        const jobs = await api('/jobs?expand');
+        const list = document.getElementById('jobsList');
+        const empty = document.getElementById('emptyJobs');
+
+        if (!jobs || jobs.length === 0) {
+          list.innerHTML = '';
+          empty.style.display = 'block';
+          return;
+        }
+
+        empty.style.display = 'none';
+        list.innerHTML = jobs.reverse().slice(0, 50).map(j => {
+          const stateClass = j.State === 'Running' ? 'running' :
+                             j.State === 'Success' ? 'success' :
+                             j.State === 'Pending' || j.State === 'Retry' ? 'pending' :
+                             j.State === 'Paused' ? 'paused' : 'failure';
+          const duration = j.EffectiveRuntime != null ? formatDuration(j.EffectiveRuntime) : '-';
+          return `<div class="job-item">
+            <div>
+              <div class="job-type">${escHtml(j.Type)}</div>
+              <div class="job-detail">${escHtml(j.ID.slice(0,12))} &middot; ${escHtml(j.CreationTime || '')}</div>
+            </div>
+            <div style="display:flex;align-items:center;">
+              <span class="job-duration">${duration}</span>
+              <span class="job-status ${stateClass}">${escHtml(j.State)}</span>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        toast('Failed to load jobs', 'error');
+      }
+    }
+
+    // Reports
+    let routingLog = [];
+
+    async function loadRoutingLog() {
+      try {
+        const res = await fetch('/manage/routing-log.json');
+        if (res.ok) {
+          routingLog = await res.json();
+        }
+      } catch (e) {
+        routingLog = [];
+      }
+    }
+
+    async function loadReports() {
+      try {
+        const [jobs] = await Promise.all([
+          api('/jobs?expand'),
+          loadRoutingLog()
+        ]);
+
+        const storeJobs = (jobs || []).filter(j => j.Type === 'DicomModalityStore');
+
+        // Build set of auto-routed study IDs from routing log
+        const autoRoutedStudies = new Set(routingLog.map(e => e.study));
+
+        // Build report rows from store jobs
+        const rows = [];
+        for (const j of storeJobs) {
+          const resources = j.Content?.ParentResources || [];
+          const dest = j.Content?.RemoteAet || j.Content?.LocalAet || '?';
+          const isAuto = resources.some(r => autoRoutedStudies.has(r));
+          const duration = j.EffectiveRuntime != null ? formatDuration(j.EffectiveRuntime) : '-';
+
+          // Try to find patient name from loaded studies
+          let patientName = '';
+          for (const studyId of resources) {
+            const study = studies.find(s => s.ID === studyId);
+            if (study) {
+              patientName = study.PatientMainDicomTags?.PatientName || '';
+              break;
+            }
+          }
+
+          rows.push({
+            time: j.CompletionTime || j.CreationTime || '',
+            patient: patientName,
+            dest: dest,
+            source: isAuto ? 'Auto' : 'Manual',
+            duration: duration,
+            state: j.State,
+            studyIds: resources
+          });
+        }
+
+        // Sort by time descending
+        rows.sort((a, b) => b.time.localeCompare(a.time));
+
+        // Compute summary stats
+        const total = rows.length;
+        const autoCount = rows.filter(r => r.source === 'Auto').length;
+        const manualCount = rows.filter(r => r.source === 'Manual').length;
+        const failed = rows.filter(r => r.state === 'Failure').length;
+        const succeeded = rows.filter(r => r.state === 'Success').length;
+        const successRate = total > 0 ? ((succeeded / total) * 100).toFixed(1) + '%' : '-';
+
+        document.getElementById('rptTotal').textContent = total;
+        document.getElementById('rptAuto').textContent = autoCount;
+        document.getElementById('rptManual').textContent = manualCount;
+        document.getElementById('rptFailed').textContent = failed;
+        document.getElementById('rptSuccessRate').textContent = successRate;
+
+        // Render table
+        const tbody = document.getElementById('reportBody');
+        const empty = document.getElementById('emptyReports');
+
+        if (rows.length === 0) {
+          tbody.innerHTML = '';
+          empty.style.display = 'block';
+          return;
+        }
+
+        empty.style.display = 'none';
+
+        // Fetch patient names for studies we don't have loaded
+        const unknownStudyIds = [];
+        for (const row of rows) {
+          if (!row.patient && row.studyIds.length > 0) {
+            unknownStudyIds.push(...row.studyIds);
+          }
+        }
+        const uniqueUnknown = [...new Set(unknownStudyIds)];
+        const patientNameCache = {};
+        // Fetch up to 20 unknown studies to avoid too many requests
+        for (const sid of uniqueUnknown.slice(0, 20)) {
+          try {
+            const s = await api('/studies/' + sid);
+            patientNameCache[sid] = s?.PatientMainDicomTags?.PatientName || '';
+          } catch (e) { /* study may have been deleted */ }
+        }
+        // Fill in missing patient names
+        for (const row of rows) {
+          if (!row.patient) {
+            for (const sid of row.studyIds) {
+              if (patientNameCache[sid]) {
+                row.patient = patientNameCache[sid];
+                break;
+              }
+            }
+          }
+        }
+
+        tbody.innerHTML = rows.slice(0, 100).map(r => {
+          const stateClass = r.state === 'Success' ? 'success' :
+                             r.state === 'Running' ? 'running' :
+                             r.state === 'Failure' ? 'failure' : 'pending';
+          const sourceClass = r.source === 'Auto' ? 'auto' : 'manual';
+          return `<tr>
+            <td style="font-size:12px;color:var(--text-muted)">${escHtml(formatJobTime(r.time))}</td>
+            <td class="patient-name">${escHtml(r.patient || '-')}</td>
+            <td>${escHtml(r.dest)}</td>
+            <td><span class="source-badge ${sourceClass}">${r.source}</span></td>
+            <td style="font-size:12px;color:var(--text-muted)">${r.duration}</td>
+            <td><span class="job-status ${stateClass}">${escHtml(r.state)}</span></td>
+          </tr>`;
+        }).join('');
+      } catch (e) {
+        toast('Failed to load reports: ' + e.message, 'error');
+      }
+    }
+
+    // Search with debounce
+    document.getElementById('searchInput').addEventListener('input', () => {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(loadStudies, 400);
+    });
+
+    // Close modals on overlay click
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', e => {
+        if (e.target === overlay) overlay.classList.remove('active');
+      });
+    });
+
+    // Init
+    loadStats();
+    loadStudies().then(() => startBackgroundPolling());
+    setInterval(loadStats, 15000);
+  </script>
+</body>
+</html>

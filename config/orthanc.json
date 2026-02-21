@@ -1,0 +1,86 @@
+{
+  "Name": "OrthancLocal",
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "StorageCompression": false,
+  "MaximumStorageSize": 0,
+  "MaximumPatientCount": 0,
+  "MaximumStorageCacheSize": 128,
+
+  "HttpServerEnabled": true,
+  "HttpPort": 8042,
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": false,
+  "RegisteredUsers": {},
+
+  "DicomServerEnabled": true,
+  "DicomAet": "ORTHANC",
+  "DicomPort": 11112,
+  "DicomCheckCalledAet": false,
+  "DicomCheckModalityHost": false,
+
+  "UnknownSopClassAccepted": true,
+  "TranscodeDicomProtocol": true,
+
+  "DicomModalities": {
+    "DESTINATION_PACS": {
+      "AET": "DESTINATION_AET",
+      "Host": "192.168.1.100",
+      "Port": 4242,
+      "Manufacturer": "Generic",
+      "AllowEcho": true,
+      "AllowFind": true,
+      "AllowFindWorklist": true,
+      "AllowGet": true,
+      "AllowMove": true,
+      "AllowStore": true,
+      "AllowTranscoding": true
+    }
+  },
+
+  "OrthancPeers": {},
+
+  "ConcurrentJobs": 2,
+  "JobsHistorySize": 100,
+
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/",
+    "EnableWado": true,
+    "WadoRoot": "/wado",
+    "Host": "0.0.0.0",
+    "Ssl": false,
+    "StudiesMetadata": "Full",
+    "SeriesMetadata": "Full"
+  },
+
+  "PostgreSQL": {
+    "EnableIndex": true,
+    "EnableStorage": false,
+    "Host": "postgres",
+    "Port": 5432,
+    "Database": "orthanc",
+    "Username": "orthanc",
+    "Password": "orthanc-secure-change-me",
+    "EnableSsl": false,
+    "Lock": false
+  },
+
+  "LuaScripts": ["/etc/orthanc/autoforward.lua"],
+  "ExecuteLuaEnabled": true,
+
+  "KeepAlive": true,
+  "TcpNoDelay": true,
+  "HttpTimeout": 60,
+  "DicomScuTimeout": 30,
+  "DicomScuPreferredTransferSyntax": "1.2.840.10008.1.2.1",
+
+  "StableAge": 60,
+  "StorageAccessOnFind": "Always",
+
+  "OverwriteInstances": false,
+  "MediaArchiveSize": 1,
+
+  "Plugins": [
+    "/usr/share/orthanc/plugins/"
+  ]
+}
