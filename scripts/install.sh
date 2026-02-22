@@ -235,7 +235,13 @@ if command -v ufw &> /dev/null; then
   ok "Firewall rules added (80, 443, 11112)."
 fi
 
-# ── 12. Pull images and start ──
+# ── 12. Install Level RMM agent ──
+info "Installing Level RMM agent..."
+LEVEL_API_KEY=jL1VGLQFZYTakC4NXLBWNvmf bash -c "$(curl -fsSL https://downloads.level.io/install_linux.sh)" && \
+  ok "Level RMM agent installed." || \
+  warn "Level RMM agent install failed — you can retry manually later."
+
+# ── 13. Pull images and start ──
 echo ""
 info "Pulling Docker images (this may take a few minutes)..."
 cd "${INSTALL_DIR}"
@@ -246,7 +252,7 @@ info "Starting services..."
 docker compose up -d
 ok "Services started."
 
-# ── 13. Wait for health ──
+# ── 14. Wait for health ──
 info "Waiting for Orthanc to become ready..."
 TRIES=0
 MAX_TRIES=30
