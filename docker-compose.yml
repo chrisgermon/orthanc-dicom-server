@@ -11,7 +11,7 @@ services:
       - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
       - ./certs:/etc/nginx/certs:ro
       - ./dashboard:/usr/share/nginx/html/dashboard:ro
-      - ./config/routing-log.json:/usr/share/nginx/html/dashboard/routing-log.json:ro
+      - ./config/routing-log.json:/usr/share/nginx/html/dashboard/routing-log.json
     depends_on:
       - orthanc
       - ohif
