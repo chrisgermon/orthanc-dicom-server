@@ -7,7 +7,7 @@ ROUTING_RULES = {}
 ROUTING_LOG_PATH = "/var/lib/orthanc/routing-log.json"
 ROUTING_LOG_MAX = 500
 
-function AppendRoutingLog(studyId, ruleName, destination)
+function AppendRoutingLog(studyId, ruleName, destination, status, errorMsg, callingAet, calledAet, studyDesc, studyModality)
   -- Read existing log
   local entries = {}
   local f = io.open(ROUTING_LOG_PATH, "r")
@@ -23,7 +23,13 @@ function AppendRoutingLog(studyId, ruleName, destination)
     study = studyId,
     rule = ruleName or "",
     dest = destination,
-    time = os.date("!%Y-%m-%dT%H:%M:%S") .. "Z"
+    time = os.date("!%Y-%m-%dT%H:%M:%S") .. "Z",
+    status = status or "sent",
+    error = errorMsg or "",
+    callingAet = callingAet or "",
+    calledAet = calledAet or "",
+    description = studyDesc or "",
+    modality = studyModality or ""
   })
 
   -- Cap at max entries (remove oldest)
@@ -37,7 +43,13 @@ function AppendRoutingLog(studyId, ruleName, destination)
     local item = '{"study":' .. QuoteJson(e.study) ..
       ',"rule":' .. QuoteJson(e.rule) ..
       ',"dest":' .. QuoteJson(e.dest) ..
-      ',"time":' .. QuoteJson(e.time) .. '}'
+      ',"time":' .. QuoteJson(e.time) ..
+      ',"status":' .. QuoteJson(e.status or "sent") ..
+      ',"error":' .. QuoteJson(e.error or "") ..
+      ',"callingAet":' .. QuoteJson(e.callingAet or "") ..
+      ',"calledAet":' .. QuoteJson(e.calledAet or "") ..
+      ',"description":' .. QuoteJson(e.description or "") ..
+      ',"modality":' .. QuoteJson(e.modality or "") .. '}'
     table.insert(parts, item)
   end
 
@@ -222,9 +234,10 @@ function OnStableStudy(studyId, tags, metadata)
         print("Auto-routing study " .. studyId .. " to " .. rule.destination .. " (rule: " .. (rule.name or "?") .. ")")
         local ok, err = pcall(SendToModality, studyId, rule.destination)
         if ok then
-          AppendRoutingLog(studyId, rule.name, rule.destination)
+          AppendRoutingLog(studyId, rule.name, rule.destination, "sent", "", callingAet, calledAet, description, modality)
         else
           print("Auto-routing failed for " .. studyId .. ": " .. tostring(err))
+          AppendRoutingLog(studyId, rule.name, rule.destination, "failed", tostring(err), callingAet, calledAet, description, modality)
         end
       end
     end

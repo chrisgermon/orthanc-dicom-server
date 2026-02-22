@@ -193,6 +193,15 @@
         <div class="stat-card"><div class="stat-label">Series</div><div class="stat-value" id="statSeries">-</div></div>
         <div class="stat-card"><div class="stat-label">Instances</div><div class="stat-value" id="statInstances">-</div></div>
         <div class="stat-card"><div class="stat-label">Disk Usage</div><div class="stat-value" id="statDisk">-</div></div>
+        <div class="stat-card"><div class="stat-label">Routed</div><div class="stat-value" id="statRouted">-</div></div>
+        <div class="stat-card" id="statFailedCard"><div class="stat-label">Failed</div><div class="stat-value" id="statFailed">-</div></div>
+      </div>
+      <div class="card" id="recentRoutingCard" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div class="card-title" style="margin-bottom:0;">Recent Routing</div>
+          <button class="btn btn-sm" onclick="document.querySelector('[data-section=routing]').click()">View All</button>
+        </div>
+        <div id="recentRoutingList" style="font-size:13px;"></div>
       </div>
       <div class="grid-2">
         <div class="card">
@@ -239,6 +248,32 @@
         <div style="font-size:48px;margin-bottom:12px;opacity:0.5;">&#128268;</div>
         <h3 style="font-size:16px;color:var(--text);margin-bottom:4px;">No routing rules configured</h3>
         <p style="font-size:13px;">Click "Add Rule" to auto-forward incoming studies to another modality.</p>
+      </div>
+
+      <!-- Routing Log -->
+      <div class="card" style="margin-top:24px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <div class="card-title" style="margin-bottom:0;">Routing Log</div>
+          <button class="btn btn-sm" onclick="loadRoutingLog()">Refresh</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table id="routingLogTable" style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead>
+              <tr style="border-bottom:2px solid var(--border);text-align:left;">
+                <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;white-space:nowrap;">Time</th>
+                <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;">Rule</th>
+                <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;">Destination</th>
+                <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;">Status</th>
+                <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;white-space:nowrap;">Calling AET</th>
+                <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;white-space:nowrap;">Called AET</th>
+                <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;">Description</th>
+              </tr>
+            </thead>
+            <tbody id="routingLogBody">
+              <tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text-muted);">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -541,7 +576,7 @@
         const sec = tab.dataset.section;
         document.getElementById('sec-' + sec).classList.add('active');
         if (sec === 'modalities') loadModalities();
-        if (sec === 'routing') loadRoutingRules();
+        if (sec === 'routing') { loadRoutingRules(); loadRoutingLog(); }
         if (sec === 'logs') loadChanges();
         if (sec === 'jobs') loadJobs();
         if (sec === 'settings') loadSettings();
@@ -577,6 +612,8 @@
           ['Storage Compression', system.StorageCompression ? 'Yes' : 'No'],
         ].map(([l,v]) => `<li><span class="label">${esc(l)}</span><span class="value">${esc(String(v || '-'))}</span></li>`).join('');
 
+        loadRoutingStats();
+
         try {
           const plugins = await api('/plugins');
           document.getElementById('pluginsList').innerHTML = plugins && plugins.length > 0
@@ -588,6 +625,68 @@
         document.getElementById('statusText').textContent = 'Offline';
         toast('Failed to load dashboard: ' + e.message, 'error');
       }
+    }
+
+    async function loadRoutingStats() {
+      try {
+        const res = await fetch('/manage/routing-log.json');
+        let entries = [];
+        if (res.ok) {
+          const text = await res.text();
+          if (text.trim()) entries = JSON.parse(text);
+        }
+        const sent = entries.filter(e => e.status === 'sent' || !e.status).length;
+        const failed = entries.filter(e => e.status === 'failed').length;
+        document.getElementById('statRouted').textContent = sent.toLocaleString();
+        const failedEl = document.getElementById('statFailed');
+        failedEl.textContent = failed.toLocaleString();
+        if (failed > 0) {
+          failedEl.style.background = 'none';
+          failedEl.style.webkitBackgroundClip = 'unset';
+          failedEl.style.webkitTextFillColor = 'var(--danger)';
+          failedEl.style.color = 'var(--danger)';
+          document.getElementById('statFailedCard').style.borderColor = 'var(--danger)';
+        }
+
+        // Recent routing - last 5
+        const card = document.getElementById('recentRoutingCard');
+        const list = document.getElementById('recentRoutingList');
+        if (entries.length === 0) {
+          card.style.display = 'none';
+          return;
+        }
+        card.style.display = 'block';
+        const recent = entries.slice(-5).reverse();
+        list.innerHTML = recent.map(e => {
+          const status = e.status || 'sent';
+          const statusColor = status === 'sent' ? 'var(--success)' : 'var(--danger)';
+          const statusLabel = status === 'sent' ? 'Sent' : 'Failed';
+          const timeStr = e.time ? relativeTime(e.time) : '-';
+          return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);">
+            <span style="color:var(--text-muted);min-width:80px;font-size:12px;">${esc(timeStr)}</span>
+            <span style="flex:1;">${esc(e.rule || '-')} &rarr; ${esc(e.dest || '-')}</span>
+            <span style="color:${statusColor};font-weight:600;font-size:12px;">${esc(statusLabel)}</span>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        document.getElementById('statRouted').textContent = '-';
+        document.getElementById('statFailed').textContent = '-';
+      }
+    }
+
+    function relativeTime(isoStr) {
+      const now = new Date();
+      const then = new Date(isoStr);
+      const diffMs = now - then;
+      const diffSec = Math.floor(diffMs / 1000);
+      if (diffSec < 60) return 'just now';
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return diffMin + 'm ago';
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return diffHr + 'h ago';
+      const diffDay = Math.floor(diffHr / 24);
+      if (diffDay < 7) return diffDay + 'd ago';
+      return then.toLocaleDateString();
     }
 
     function formatSize(bytes) {
@@ -676,28 +775,12 @@
         await api('/modalities/' + encodeURIComponent(editName || name), {
           method: 'PUT', body: JSON.stringify(body)
         });
-        // Persist to orthanc.json
-        const modalityJson = JSON.stringify(body);
-        const luaScript = `
-local f = io.open("/etc/orthanc/orthanc.json", "r")
-if not f then print("ERROR: Cannot read config") return end
-local content = f:read("*a")
-f:close()
-local config = ParseJson(content)
-if not config then print("ERROR: Cannot parse config") return end
-config.DicomModalities = config.DicomModalities or {}
-${editName && editName !== name ? `config.DicomModalities[${JSON.stringify(editName)}] = nil` : ''}
-config.DicomModalities[${JSON.stringify(editName || name)}] = ParseJson([==[${modalityJson}]==])
-local fw = io.open("/etc/orthanc/orthanc.json", "w")
-if not fw then print("ERROR: Cannot write config") return end
-fw:write(DumpJson(config, true))
-fw:close()
-print("OK")`;
-        await apiText('/tools/execute-script', {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: luaScript
-        });
+        // If renamed, delete old runtime entry
+        if (editName && editName !== name) {
+          try { await api('/modalities/' + encodeURIComponent(editName), { method: 'DELETE' }); } catch (e) {}
+        }
+        // Persist to orthanc.json using regex (avoids DumpJson corruption)
+        await persistModalitiesConfig();
         toast(`Modality "${name}" saved`, 'success');
         closeModalityModal();
         loadModalities();
@@ -709,29 +792,68 @@ print("OK")`;
       try {
         // Update runtime
         await api('/modalities/' + encodeURIComponent(name), { method: 'DELETE' });
-        // Persist to orthanc.json
-        const luaScript = `
+        // Persist to orthanc.json using regex (avoids DumpJson corruption)
+        await persistModalitiesConfig();
+        toast(`Modality "${name}" deleted`, 'success');
+        loadModalities();
+      } catch (e) { toast('Failed to delete: ' + e.message, 'error'); }
+    }
+
+    async function persistModalitiesConfig() {
+      // Read current modalities from runtime API (source of truth after save/delete)
+      const mods = await api('/modalities?expand');
+      // Build the DicomModalities JSON block
+      const entries = Object.entries(mods);
+      const lines = entries.map(([name, config]) => {
+        const obj = { AET: config.AET, Host: config.Host, Port: config.Port };
+        if (config.LocalAet) obj.LocalAet = config.LocalAet;
+        return '    ' + JSON.stringify(name) + ' : ' + JSON.stringify(obj);
+      });
+      const newBlock = '\"DicomModalities\" : {' + (lines.length > 0 ? '\n' + lines.join(',\n') + '\n  }' : ' }');
+
+      // Use Lua regex to replace the DicomModalities section in orthanc.json
+      const luaScript = `
 local f = io.open("/etc/orthanc/orthanc.json", "r")
 if not f then print("ERROR: Cannot read config") return end
 local content = f:read("*a")
 f:close()
-local config = ParseJson(content)
-if not config then print("ERROR: Cannot parse config") return end
-config.DicomModalities = config.DicomModalities or {}
-config.DicomModalities[${JSON.stringify(name)}] = nil
+
+-- Match "DicomModalities" : { ... } with brace counting
+local startIdx = content:find('"DicomModalities"%s*:%s*{')
+if not startIdx then
+  print("ERROR: DicomModalities section not found in config")
+  return
+end
+-- Find the opening brace
+local braceStart = content:find('{', startIdx)
+local depth = 0
+local endIdx = braceStart
+for i = braceStart, #content do
+  local c = content:sub(i, i)
+  if c == '{' then depth = depth + 1
+  elseif c == '}' then
+    depth = depth - 1
+    if depth == 0 then endIdx = i; break end
+  end
+end
+
+local before = content:sub(1, startIdx - 1)
+local after = content:sub(endIdx + 1)
+local newContent = before .. [==[${newBlock}]==] .. after
+
 local fw = io.open("/etc/orthanc/orthanc.json", "w")
 if not fw then print("ERROR: Cannot write config") return end
-fw:write(DumpJson(config, true))
+fw:write(newContent)
 fw:close()
 print("OK")`;
-        await apiText('/tools/execute-script', {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: luaScript
-        });
-        toast(`Modality "${name}" deleted`, 'success');
-        loadModalities();
-      } catch (e) { toast('Failed to delete: ' + e.message, 'error'); }
+      const result = await apiText('/tools/execute-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: luaScript
+      });
+      if (result.trim().startsWith('ERROR')) {
+        throw new Error(result.trim());
+      }
     }
 
     // ── Routing Rules ──
@@ -925,6 +1047,48 @@ print("OK: " .. #ROUTING_RULES .. " rules active")`;
       } catch (e) {
         toast('Failed to save routing rules: ' + e.message, 'error');
       }
+    }
+
+    // ── Routing Log ──
+    async function loadRoutingLog() {
+      try {
+        const res = await fetch('/manage/routing-log.json');
+        let entries = [];
+        if (res.ok) {
+          const text = await res.text();
+          if (text.trim()) entries = JSON.parse(text);
+        }
+        renderRoutingLog(entries);
+      } catch (e) {
+        document.getElementById('routingLogBody').innerHTML =
+          '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text-muted);">No routing log data available.</td></tr>';
+      }
+    }
+
+    function renderRoutingLog(entries) {
+      const body = document.getElementById('routingLogBody');
+      if (!entries || entries.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text-muted);">No routing events logged yet.</td></tr>';
+        return;
+      }
+      // Newest first, cap at 100
+      const display = entries.slice().reverse().slice(0, 100);
+      body.innerHTML = display.map(e => {
+        const status = e.status || '-';
+        const statusColor = status === 'sent' ? 'var(--success)' : status === 'failed' ? 'var(--danger)' : 'var(--text-muted)';
+        const statusLabel = status === 'sent' ? 'Sent' : status === 'failed' ? 'Failed' : status;
+        const time = e.time ? new Date(e.time).toLocaleString() : '-';
+        const errorTip = e.error ? ' title="' + esc(e.error) + '"' : '';
+        return `<tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:6px 10px;white-space:nowrap;color:var(--text-muted);">${esc(time)}</td>
+          <td style="padding:6px 10px;">${esc(e.rule || '-')}</td>
+          <td style="padding:6px 10px;">${esc(e.dest || '-')}</td>
+          <td style="padding:6px 10px;"><span${errorTip} style="color:${statusColor};font-weight:600;">${esc(statusLabel)}</span></td>
+          <td style="padding:6px 10px;">${esc(e.callingAet || '-')}</td>
+          <td style="padding:6px 10px;">${esc(e.calledAet || '-')}</td>
+          <td style="padding:6px 10px;">${esc(e.description || '-')}</td>
+        </tr>`;
+      }).join('');
     }
 
     // ── Changes / Logs (fetch LATEST, not oldest) ──
