@@ -232,7 +232,9 @@ function OnStableStudy(studyId, tags, metadata)
 
       if match and rule.destination and rule.destination ~= "" then
         print("Auto-routing study " .. studyId .. " to " .. rule.destination .. " (rule: " .. (rule.name or "?") .. ")")
-        local ok, err = pcall(SendToModality, studyId, rule.destination)
+        local ok, err = pcall(function()
+          RestApiPost("/modalities/" .. rule.destination .. "/store", '{"Resources":["' .. studyId .. '"],"Asynchronous":true}')
+        end)
         if ok then
           AppendRoutingLog(studyId, rule.name, rule.destination, "sent", "", callingAet, calledAet, description, modality)
         else
