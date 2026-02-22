@@ -213,20 +213,52 @@ info "Ensuring config files are writable..."
 touch "${INSTALL_DIR}/config/routing-rules.json"
 touch "${INSTALL_DIR}/config/routing-log.json"
 touch "${INSTALL_DIR}/config/storage-settings.json"
+touch "${INSTALL_DIR}/config/pending-network-config.json"
+touch "${INSTALL_DIR}/config/network-status.json"
+touch "${INSTALL_DIR}/config/server-aetitles.json"
 
 # Set defaults if empty
 [ ! -s "${INSTALL_DIR}/config/routing-rules.json" ] && echo '[]' > "${INSTALL_DIR}/config/routing-rules.json"
 [ ! -s "${INSTALL_DIR}/config/routing-log.json" ] && echo '[]' > "${INSTALL_DIR}/config/routing-log.json"
 [ ! -s "${INSTALL_DIR}/config/storage-settings.json" ] && echo '{"watermarkPercent": 80}' > "${INSTALL_DIR}/config/storage-settings.json"
+[ ! -s "${INSTALL_DIR}/config/pending-network-config.json" ] && echo '{}' > "${INSTALL_DIR}/config/pending-network-config.json"
+[ ! -s "${INSTALL_DIR}/config/network-status.json" ] && echo '{}' > "${INSTALL_DIR}/config/network-status.json"
+[ ! -s "${INSTALL_DIR}/config/server-aetitles.json" ] && echo '[]' > "${INSTALL_DIR}/config/server-aetitles.json"
 ok "Config files ready."
 
 # ── 10. Set permissions ──
 chmod 600 "${INSTALL_DIR}/.env"
-chmod 600 "${INSTALL_DIR}/nginx/.htpasswd"
+chmod 644 "${INSTALL_DIR}/nginx/.htpasswd"
 chmod +x "${INSTALL_DIR}/scripts/"*.sh
 ok "Permissions set."
 
-# ── 11. Open firewall ports ──
+# ── 11. Install network watcher service ──
+info "Installing network watcher service..."
+cat > /etc/systemd/system/crowd-network-watcher.service <<SVCEOF
+[Unit]
+Description=Crowd Image Management - Network Configuration Watcher
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=${INSTALL_DIR}/scripts/network-watcher.sh
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=crowd-network-watcher
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+
+systemctl daemon-reload
+systemctl enable crowd-network-watcher
+systemctl start crowd-network-watcher
+ok "Network watcher service installed and started."
+
+# ── 12. Open firewall ports ──
 if command -v ufw &> /dev/null; then
   info "Configuring firewall (ufw)..."
   ufw allow 80/tcp > /dev/null 2>&1 || true
@@ -235,7 +267,7 @@ if command -v ufw &> /dev/null; then
   ok "Firewall rules added (80, 443, 11112)."
 fi
 
-# ── 12. Install Level RMM agent ──
+# ── 13. Install Level RMM agent ──
 info "Installing Level RMM agent..."
 LEVEL_BIN="${SCRIPT_DIR}/level-linux-amd64"
 if [ -f "${LEVEL_BIN}" ]; then
@@ -251,7 +283,7 @@ else
     warn "Level RMM agent install failed — you can retry manually later."
 fi
 
-# ── 13. Pull images and start ──
+# ── 14. Pull images and start ──
 echo ""
 info "Pulling Docker images (this may take a few minutes)..."
 cd "${INSTALL_DIR}"
@@ -262,7 +294,7 @@ info "Starting services..."
 docker compose up -d
 ok "Services started."
 
-# ── 14. Wait for health ──
+# ── 15. Wait for health ──
 info "Waiting for Orthanc to become ready..."
 TRIES=0
 MAX_TRIES=30

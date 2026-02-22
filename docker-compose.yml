@@ -90,6 +90,9 @@ services:
       - ./config/routing-rules.json:/var/lib/orthanc/routing-rules.json
       - ./config/routing-log.json:/var/lib/orthanc/routing-log.json
       - ./config/storage-settings.json:/var/lib/orthanc/storage-settings.json
+      - ./config/pending-network-config.json:/var/lib/orthanc/pending-network-config.json
+      - ./config/network-status.json:/var/lib/orthanc/network-status.json
+      - ./config/server-aetitles.json:/var/lib/orthanc/server-aetitles.json
       - orthanc-storage:/var/lib/orthanc/db
     environment:
       - ORTHANC__POSTGRESQL__HOST=postgres

@@ -81,7 +81,8 @@ function SaveRoutingRules()
       ',"destination":' .. QuoteJson(rule.destination or "") ..
       ',"filterModality":' .. QuoteJson(rule.filterModality or "") ..
       ',"filterDescription":' .. QuoteJson(rule.filterDescription or "") ..
-      ',"filterCallingAet":' .. QuoteJson(rule.filterCallingAet or "") .. '}'
+      ',"filterCallingAet":' .. QuoteJson(rule.filterCallingAet or "") ..
+      ',"filterCalledAet":' .. QuoteJson(rule.filterCalledAet or "") .. '}'
     table.insert(parts, entry)
   end
   f:write("[" .. table.concat(parts, ",") .. "]")
@@ -204,12 +205,18 @@ function OnStableStudy(studyId, tags, metadata)
     callingAet = metadata.CallingAet
   end
 
+  local calledAet = ""
+  if metadata and metadata.CalledAet then
+    calledAet = metadata.CalledAet
+  end
+
   for _, rule in ipairs(ROUTING_RULES) do
     if rule.enabled then
       local match = true
       if not MatchesFilter(modality, rule.filterModality) then match = false end
       if not MatchesFilter(description, rule.filterDescription) then match = false end
       if not MatchesFilter(callingAet, rule.filterCallingAet) then match = false end
+      if not MatchesFilter(calledAet, rule.filterCalledAet) then match = false end
 
       if match and rule.destination and rule.destination ~= "" then
         print("Auto-routing study " .. studyId .. " to " .. rule.destination .. " (rule: " .. (rule.name or "?") .. ")")

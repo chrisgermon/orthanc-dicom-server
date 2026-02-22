@@ -281,6 +281,43 @@
       <div class="section-header">
         <h2 class="section-title">Settings &amp; Maintenance</h2>
       </div>
+
+      <!-- Network Configuration (full-width) -->
+      <div class="card" id="networkConfigCard">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+          <div class="card-title" style="margin-bottom:0;">Network Configuration</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="networkApplyStatus" style="font-size:12px;color:var(--text-muted);"></span>
+            <button class="btn btn-sm" onclick="loadNetworkStatus()">Refresh</button>
+          </div>
+        </div>
+        <div id="networkInterfacesList">
+          <div style="color:var(--text-muted);font-size:13px;">Loading network interfaces...</div>
+        </div>
+        <div id="networkApplyArea" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+          <button class="btn btn-primary" id="networkApplyBtn" onclick="applyNetworkConfig()">Apply Network Configuration</button>
+          <span id="networkApplyFeedback" style="font-size:12px;color:var(--text-muted);margin-left:12px;"></span>
+          <p style="font-size:11px;color:var(--text-dim);margin-top:8px;">Uses <code>netplan try</code> with 60-second timeout. If connectivity is lost, changes auto-rollback.</p>
+        </div>
+      </div>
+
+      <!-- Server AE Titles -->
+      <div class="card" id="serverAeTitlesCard">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+          <div class="card-title" style="margin-bottom:0;">Server AE Titles</div>
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">AE Titles this server is known by. The primary AET comes from DICOM Server Configuration. Additional AETs can be used for routing rules (Called AET filter).</p>
+        <div id="serverAeTitlesList" style="margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;align-items:flex-end;">
+          <div class="form-group" style="margin-bottom:0;flex:1;">
+            <label>Add AE Title</label>
+            <input type="text" id="newServerAet" placeholder="e.g. ORTHANC_CT" maxlength="16" style="text-transform:uppercase;">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="addServerAeTitle()" style="height:38px;">Add</button>
+        </div>
+        <p style="font-size:11px;color:var(--text-dim);margin-top:8px;">Uppercase A-Z, 0-9, underscore, hyphen. Max 16 characters. These are informational for routing only — the server accepts ALL incoming DICOM regardless.</p>
+      </div>
+
       <div class="grid-2">
         <div class="card">
           <div class="card-title">DICOM Server Configuration</div>
@@ -356,6 +393,8 @@
       <div class="form-group"><label>AE Title</label><input type="text" id="modAET" placeholder="e.g. CT_SCANNER"></div>
       <div class="form-group"><label>Host / IP</label><input type="text" id="modHost" placeholder="e.g. 192.168.1.100"></div>
       <div class="form-group"><label>Port</label><input type="number" id="modPort" placeholder="e.g. 104" value="104"></div>
+      <div class="form-group"><label>Local AE Title (optional)</label><input type="text" id="modLocalAet" placeholder="AET Orthanc presents when forwarding" maxlength="16"></div>
+      <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">If set, Orthanc uses this AE Title when connecting to this modality. Leave blank to use the server's primary AET.</p>
       <div class="modal-actions">
         <button class="btn" onclick="closeModalityModal()">Cancel</button>
         <button class="btn btn-primary" onclick="saveModality()">Save</button>
@@ -385,7 +424,11 @@
         <label>Filter: Calling AE Title (optional)</label>
         <input type="text" id="ruleFilterCallingAet" placeholder="e.g. CT_SCANNER_1">
       </div>
-      <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Leave filters blank to match all studies. Use * as wildcard.</p>
+      <div class="form-group">
+        <label>Filter: Called AE Title</label>
+        <select id="ruleFilterCalledAet"></select>
+      </div>
+      <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Leave filters blank to match all studies. Use * as wildcard. Called AET filters by which server AE Title was used to send the study.</p>
       <div class="modal-actions">
         <button class="btn" onclick="closeRuleModal()">Cancel</button>
         <button class="btn btn-primary" onclick="saveRule()">Save</button>
@@ -567,8 +610,10 @@
           const aet = config.AET || config[0] || '?';
           const host = config.Host || config[1] || '?';
           const port = config.Port || config[2] || '?';
+          const localAet = config.LocalAet || '';
+          const localAetText = localAet ? ` &middot; Local AET: <strong>${esc(localAet)}</strong>` : '';
           return `<div class="modality-card">
-            <div class="modality-info"><h3>${esc(name)}</h3><p>AET: ${esc(aet)} &middot; ${esc(host)}:${port}</p></div>
+            <div class="modality-info"><h3>${esc(name)}</h3><p>AET: ${esc(aet)} &middot; ${esc(host)}:${port}${localAetText}</p></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="btn btn-sm btn-success" onclick="echoModality('${esc(name)}')">C-ECHO</button>
               <button class="btn btn-sm" onclick="editModality('${esc(name)}')">Edit</button>
@@ -595,6 +640,7 @@
         document.getElementById('modAET').value = '';
         document.getElementById('modHost').value = '';
         document.getElementById('modPort').value = '104';
+        document.getElementById('modLocalAet').value = '';
         document.getElementById('modName').disabled = false;
       }
       document.getElementById('modalityModal').classList.add('active');
@@ -611,6 +657,7 @@
         document.getElementById('modAET').value = config.AET || config[0] || '';
         document.getElementById('modHost').value = config.Host || config[1] || '';
         document.getElementById('modPort').value = config.Port || config[2] || 104;
+        document.getElementById('modLocalAet').value = config.LocalAet || '';
       } catch (e) { toast('Failed to load modality: ' + e.message, 'error'); }
     }
 
@@ -620,10 +667,13 @@
       const aet = document.getElementById('modAET').value.trim();
       const host = document.getElementById('modHost').value.trim();
       const port = parseInt(document.getElementById('modPort').value) || 104;
+      const localAet = document.getElementById('modLocalAet').value.trim();
       if (!name || !aet || !host) { toast('Please fill in all fields', 'error'); return; }
+      const body = { AET: aet, Host: host, Port: port };
+      if (localAet) body.LocalAet = localAet;
       try {
         await api('/modalities/' + encodeURIComponent(editName || name), {
-          method: 'PUT', body: JSON.stringify({ AET: aet, Host: host, Port: port })
+          method: 'PUT', body: JSON.stringify(body)
         });
         toast(`Modality "${name}" saved`, 'success');
         closeModalityModal();
@@ -677,7 +727,8 @@
         const filters = [];
         if (rule.filterModality) filters.push('Modality: ' + rule.filterModality);
         if (rule.filterDescription) filters.push('Desc: ' + rule.filterDescription);
-        if (rule.filterCallingAet) filters.push('AET: ' + rule.filterCallingAet);
+        if (rule.filterCallingAet) filters.push('Calling AET: ' + rule.filterCallingAet);
+        if (rule.filterCalledAet) filters.push('Called AET: ' + rule.filterCalledAet);
         const filterText = filters.length > 0 ? filters.join(' | ') : 'All studies';
 
         return `<div class="rule-card ${rule.enabled ? '' : 'disabled'}">
@@ -710,6 +761,37 @@
       } catch (e) { toast('Failed to load modalities for routing', 'error'); }
     }
 
+    async function populateCalledAetOptions(selectedValue) {
+      const sel = document.getElementById('ruleFilterCalledAet');
+      sel.innerHTML = '<option value="">Any (match all)</option>';
+      try {
+        // Get primary AET from /system
+        const system = await api('/system');
+        const primaryAet = system.DicomAet || 'ORTHANC';
+        sel.innerHTML += `<option value="${esc(primaryAet)}">${esc(primaryAet)} (Primary)</option>`;
+
+        // Get additional AETs from server-aetitles.json
+        const luaScript = `
+local f = io.open("/var/lib/orthanc/server-aetitles.json", "r")
+if not f then print("[]") return end
+local c = f:read("*a")
+f:close()
+print(c)`;
+        const result = await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript
+        });
+        const additionalAets = JSON.parse(result.trim() || '[]');
+        if (Array.isArray(additionalAets)) {
+          additionalAets.forEach(aet => {
+            sel.innerHTML += `<option value="${esc(aet)}">${esc(aet)}</option>`;
+          });
+        }
+      } catch (e) { /* silently fail, Any is still available */ }
+      if (selectedValue) sel.value = selectedValue;
+    }
+
     function openRuleModal(editIndex) {
       const isEdit = editIndex !== undefined && editIndex >= 0;
       document.getElementById('ruleEditIndex').value = isEdit ? editIndex : -1;
@@ -724,12 +806,14 @@
         populateRuleDestinations().then(() => {
           document.getElementById('ruleDestination').value = rule.destination || '';
         });
+        populateCalledAetOptions(rule.filterCalledAet || '');
       } else {
         document.getElementById('ruleName').value = '';
         document.getElementById('ruleFilterModality').value = '';
         document.getElementById('ruleFilterDescription').value = '';
         document.getElementById('ruleFilterCallingAet').value = '';
         populateRuleDestinations();
+        populateCalledAetOptions('');
       }
       document.getElementById('ruleModal').classList.add('active');
     }
@@ -746,7 +830,8 @@
         destination: document.getElementById('ruleDestination').value,
         filterModality: document.getElementById('ruleFilterModality').value.trim(),
         filterDescription: document.getElementById('ruleFilterDescription').value.trim(),
-        filterCallingAet: document.getElementById('ruleFilterCallingAet').value.trim()
+        filterCallingAet: document.getElementById('ruleFilterCallingAet').value.trim(),
+        filterCalledAet: document.getElementById('ruleFilterCalledAet').value
       };
 
       if (!rule.name || !rule.destination) {
@@ -906,7 +991,105 @@ print("OK: " .. #ROUTING_RULES .. " rules active")`;
         ].map(([l,v]) => `<li><span class="label">${esc(l)}</span><span class="value">${esc(String(v || '-'))}</span></li>`).join('');
 
         loadWatermarkSettings();
+        loadNetworkStatus();
+        loadServerAeTitles();
       } catch (e) { toast('Failed to load settings: ' + e.message, 'error'); }
+    }
+
+    let serverAeTitles = [];
+
+    async function loadServerAeTitles() {
+      try {
+        const system = await api('/system');
+        const primaryAet = system.DicomAet || 'ORTHANC';
+
+        const luaScript = `
+local f = io.open("/var/lib/orthanc/server-aetitles.json", "r")
+if not f then print("[]") return end
+local c = f:read("*a")
+f:close()
+print(c)`;
+        const result = await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript
+        });
+        serverAeTitles = JSON.parse(result.trim() || '[]');
+        if (!Array.isArray(serverAeTitles)) serverAeTitles = [];
+
+        renderServerAeTitles(primaryAet);
+      } catch (e) {
+        document.getElementById('serverAeTitlesList').innerHTML = '<div style="color:var(--danger);font-size:13px;">Failed to load AE Titles</div>';
+      }
+    }
+
+    function renderServerAeTitles(primaryAet) {
+      const list = document.getElementById('serverAeTitlesList');
+      let html = `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">
+        <strong style="flex:1;font-size:14px;">${esc(primaryAet)}</strong>
+        <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:rgba(52,211,153,0.15);color:var(--success);">Primary</span>
+      </div>`;
+
+      serverAeTitles.forEach((aet, i) => {
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">
+          <strong style="flex:1;font-size:14px;">${esc(aet)}</strong>
+          <button class="btn btn-sm btn-danger" onclick="removeServerAeTitle(${i})">Remove</button>
+        </div>`;
+      });
+
+      list.innerHTML = html;
+    }
+
+    async function addServerAeTitle() {
+      const input = document.getElementById('newServerAet');
+      const aet = input.value.trim().toUpperCase();
+      if (!aet) { toast('Please enter an AE Title', 'error'); return; }
+      if (!/^[A-Z0-9_-]{1,16}$/.test(aet)) {
+        toast('Invalid AET: uppercase A-Z, 0-9, underscore, hyphen only. Max 16 chars.', 'error');
+        return;
+      }
+      // Check for duplicates
+      const system = await api('/system');
+      const primaryAet = system.DicomAet || 'ORTHANC';
+      if (aet === primaryAet || serverAeTitles.includes(aet)) {
+        toast('AE Title already exists', 'error');
+        return;
+      }
+      serverAeTitles.push(aet);
+      await saveServerAeTitles();
+      input.value = '';
+      renderServerAeTitles(primaryAet);
+    }
+
+    async function removeServerAeTitle(index) {
+      serverAeTitles.splice(index, 1);
+      await saveServerAeTitles();
+      const system = await api('/system');
+      renderServerAeTitles(system.DicomAet || 'ORTHANC');
+    }
+
+    async function saveServerAeTitles() {
+      try {
+        const json = JSON.stringify(serverAeTitles);
+        const luaScript = `
+local f = io.open("/var/lib/orthanc/server-aetitles.json", "w")
+if not f then print("ERROR: Cannot write") return end
+f:write([==[${json}]==])
+f:close()
+print("OK")`;
+        const result = await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript
+        });
+        if (result.trim().startsWith('ERROR')) {
+          toast('Failed to save AE Titles: ' + result.trim(), 'error');
+          return;
+        }
+        toast('Server AE Titles saved', 'success');
+      } catch (e) {
+        toast('Failed to save AE Titles: ' + e.message, 'error');
+      }
     }
 
     async function loadWatermarkSettings() {
@@ -1052,6 +1235,255 @@ print("OK")`;
         toast('Changes history cleared', 'success');
         loadChanges();
       } catch (e) { toast('Failed to clear changes: ' + e.message, 'error'); }
+    }
+
+    // ── Network Configuration ──
+    let networkInterfaces = {};
+    let networkPollTimer = null;
+
+    async function loadNetworkStatus() {
+      try {
+        const luaScript = `
+local f = io.open("/var/lib/orthanc/network-status.json", "r")
+if not f then print("{}") return end
+local c = f:read("*a")
+f:close()
+print(c)`;
+        const result = await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript
+        });
+        const status = JSON.parse(result.trim() || '{}');
+        renderNetworkInterfaces(status);
+
+        // Show apply status feedback
+        const statusEl = document.getElementById('networkApplyStatus');
+        if (status.applyStatus) {
+          const colors = { applied: 'var(--success)', failed: 'var(--danger)', rolled_back: 'var(--warning)', applying: 'var(--blue-light)' };
+          statusEl.style.color = colors[status.applyStatus] || 'var(--text-muted)';
+          statusEl.textContent = status.applyMessage || status.applyStatus;
+          // Poll while applying
+          if (status.applyStatus === 'applying' && !networkPollTimer) {
+            networkPollTimer = setInterval(loadNetworkStatus, 3000);
+          } else if (status.applyStatus !== 'applying' && networkPollTimer) {
+            clearInterval(networkPollTimer);
+            networkPollTimer = null;
+          }
+        } else {
+          statusEl.textContent = status.updated ? 'Updated: ' + new Date(status.updated).toLocaleTimeString() : '';
+          statusEl.style.color = 'var(--text-muted)';
+        }
+      } catch (e) {
+        document.getElementById('networkInterfacesList').innerHTML =
+          '<div style="color:var(--danger);font-size:13px;">Failed to load network status. The network watcher service may not be running.</div>';
+      }
+    }
+
+    function renderNetworkInterfaces(status) {
+      const ifaces = status.interfaces || [];
+      const list = document.getElementById('networkInterfacesList');
+
+      if (ifaces.length === 0) {
+        list.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">No interfaces detected. Is the network watcher service running on the host?</div>';
+        document.getElementById('networkApplyArea').style.display = 'none';
+        return;
+      }
+
+      // Store current interface data for form defaults
+      networkInterfaces = {};
+      ifaces.forEach(i => { networkInterfaces[i.name] = i; });
+
+      list.innerHTML = ifaces.map(iface => {
+        const stateColor = iface.state === 'UP' ? 'var(--success)' : 'var(--text-muted)';
+        const isStatic = iface.method === 'static';
+        const id = 'net-' + iface.name.replace(/[^a-zA-Z0-9]/g, '_');
+
+        return `<div class="modality-card" style="flex-direction:column;align-items:stretch;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+              <h3 style="font-size:15px;font-weight:600;">${esc(iface.name)}</h3>
+              <p style="font-size:12px;color:var(--text-muted);margin-top:2px;">
+                MAC: ${esc(iface.mac)} &middot;
+                <span style="color:${stateColor}">${esc(iface.state)}</span> &middot;
+                IP: <strong>${esc(iface.ip || 'none')}</strong>
+              </p>
+            </div>
+            <div style="display:flex;gap:12px;align-items:center;">
+              <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;">
+                <input type="radio" name="${id}-method" value="dhcp" ${!isStatic ? 'checked' : ''} onchange="toggleNetMethod('${iface.name}', 'dhcp')"> DHCP
+              </label>
+              <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;">
+                <input type="radio" name="${id}-method" value="static" ${isStatic ? 'checked' : ''} onchange="toggleNetMethod('${iface.name}', 'static')"> Static
+              </label>
+            </div>
+          </div>
+          <div id="${id}-static" style="display:${isStatic ? 'grid' : 'none'};grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:12px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label>IP / CIDR</label>
+              <input type="text" id="${id}-address" placeholder="192.168.1.10/24" value="${esc(iface.ip || '')}">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>Gateway</label>
+              <input type="text" id="${id}-gateway" placeholder="192.168.1.1" value="${esc(iface.gateway || '')}">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>DNS (comma-separated)</label>
+              <input type="text" id="${id}-dns" placeholder="8.8.8.8, 8.8.4.4" value="${esc(iface.dns || '')}">
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+
+      document.getElementById('networkApplyArea').style.display = 'block';
+    }
+
+    function toggleNetMethod(ifaceName, method) {
+      const id = 'net-' + ifaceName.replace(/[^a-zA-Z0-9]/g, '_');
+      const staticDiv = document.getElementById(id + '-static');
+      if (staticDiv) {
+        staticDiv.style.display = method === 'static' ? 'grid' : 'none';
+      }
+    }
+
+    function validateNetworkConfig(config) {
+      const ipCidrRegex = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/;
+      const ipRegex = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+
+      for (const [name, cfg] of Object.entries(config.interfaces)) {
+        if (cfg.method === 'static') {
+          if (!cfg.address || !ipCidrRegex.test(cfg.address)) {
+            return `${name}: Invalid IP/CIDR format (expected e.g. 192.168.1.10/24)`;
+          }
+          // Validate IP octets
+          const ipPart = cfg.address.split('/')[0];
+          const octets = ipPart.split('.').map(Number);
+          if (octets.some(o => o < 0 || o > 255)) {
+            return `${name}: IP address octets must be 0-255`;
+          }
+          const cidr = parseInt(cfg.address.split('/')[1]);
+          if (cidr < 1 || cidr > 32) {
+            return `${name}: CIDR must be 1-32`;
+          }
+          if (cfg.gateway && !ipRegex.test(cfg.gateway)) {
+            return `${name}: Invalid gateway IP`;
+          }
+          if (cfg.dns) {
+            const dnsServers = cfg.dns.split(',').map(d => d.trim()).filter(d => d);
+            for (const dns of dnsServers) {
+              if (!ipRegex.test(dns)) {
+                return `${name}: Invalid DNS server: ${dns}`;
+              }
+            }
+          }
+        }
+      }
+      return null;
+    }
+
+    async function applyNetworkConfig() {
+      // Build config from form
+      const config = { interfaces: {} };
+
+      for (const [ifaceName, iface] of Object.entries(networkInterfaces)) {
+        const id = 'net-' + ifaceName.replace(/[^a-zA-Z0-9]/g, '_');
+        const methodRadio = document.querySelector(`input[name="${id}-method"]:checked`);
+        const method = methodRadio ? methodRadio.value : 'dhcp';
+
+        const ifaceConfig = { method };
+        if (method === 'static') {
+          ifaceConfig.address = document.getElementById(id + '-address')?.value.trim() || '';
+          ifaceConfig.gateway = document.getElementById(id + '-gateway')?.value.trim() || '';
+          ifaceConfig.dns = document.getElementById(id + '-dns')?.value.trim() || '';
+          // Split DNS into array
+          if (ifaceConfig.dns) {
+            ifaceConfig.dns = ifaceConfig.dns.split(',').map(d => d.trim()).filter(d => d);
+          } else {
+            ifaceConfig.dns = [];
+          }
+        }
+
+        config.interfaces[ifaceName] = ifaceConfig;
+      }
+
+      // Client-side validation
+      const validationError = validateNetworkConfig(config);
+      if (validationError) {
+        toast('Validation error: ' + validationError, 'error');
+        return;
+      }
+
+      if (!confirm('Apply network configuration?\n\nThis uses netplan try with a 60-second timeout.\nIf you lose connectivity, changes will automatically roll back.')) {
+        return;
+      }
+
+      const btn = document.getElementById('networkApplyBtn');
+      const feedback = document.getElementById('networkApplyFeedback');
+      btn.disabled = true;
+      feedback.textContent = 'Writing configuration...';
+      feedback.style.color = 'var(--blue-light)';
+
+      try {
+        const configJson = JSON.stringify(config).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const luaScript = `
+local f = io.open("/var/lib/orthanc/pending-network-config.json", "w")
+if not f then print("ERROR: Cannot write pending config") return end
+f:write("${configJson}")
+f:close()
+print("OK")`;
+        const result = await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript
+        });
+
+        if (result.trim().startsWith('ERROR')) {
+          toast('Failed to write config: ' + result.trim(), 'error');
+          btn.disabled = false;
+          feedback.textContent = '';
+          return;
+        }
+
+        toast('Network configuration submitted. Waiting for host to apply...', 'info');
+        feedback.textContent = 'Waiting for network watcher to apply...';
+
+        // Start polling for result
+        if (networkPollTimer) clearInterval(networkPollTimer);
+        networkPollTimer = setInterval(async () => {
+          await loadNetworkStatus();
+          const statusEl = document.getElementById('networkApplyStatus');
+          const statusText = statusEl.textContent;
+          if (statusText.includes('applied') || statusText.includes('failed') || statusText.includes('rolled back')) {
+            clearInterval(networkPollTimer);
+            networkPollTimer = null;
+            btn.disabled = false;
+            feedback.textContent = '';
+            if (statusText.includes('applied')) {
+              toast('Network configuration applied successfully', 'success');
+            } else if (statusText.includes('rolled')) {
+              toast('Network configuration was rolled back', 'warning');
+            } else {
+              toast('Network configuration failed', 'error');
+            }
+          }
+        }, 3000);
+
+        // Timeout after 90 seconds
+        setTimeout(() => {
+          if (networkPollTimer) {
+            clearInterval(networkPollTimer);
+            networkPollTimer = null;
+            btn.disabled = false;
+            feedback.textContent = 'Timed out waiting for result. Check status manually.';
+            feedback.style.color = 'var(--warning)';
+          }
+        }, 90000);
+
+      } catch (e) {
+        toast('Failed to submit config: ' + e.message, 'error');
+        btn.disabled = false;
+        feedback.textContent = '';
+      }
     }
 
     // Close modals on overlay click
