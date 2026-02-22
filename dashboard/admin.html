@@ -1388,8 +1388,8 @@ f:close()
 
 -- Update DicomAet
 content = content:gsub('"DicomAet"%s*:%s*"[^"]*"', '"DicomAet": "${aet}"')
--- Update DicomPort
-content = content:gsub('"DicomPort"%s*:%s*%d+', '"DicomPort": ${port}')
+-- Update DicomPort (handle both integer and string formats)
+content = content:gsub('"DicomPort"%s*:%s*"?%d+"?', '"DicomPort": ${port}')
 
 local fw = io.open("/etc/orthanc/orthanc.json", "w")
 if not fw then print("ERROR: Cannot write config"); return end

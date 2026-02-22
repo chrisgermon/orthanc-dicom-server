@@ -117,6 +117,49 @@ ok "Config restored."
 # ── Fix permissions ──
 chmod +x "${INSTALL_DIR}/scripts/"*.sh 2>/dev/null || true
 
+# ── Sanitize orthanc.json (fix known issues from dashboard saves) ──
+info "Sanitizing orthanc.json..."
+ORTHANC_CFG="${INSTALL_DIR}/config/orthanc.json"
+if [ -f "${ORTHANC_CFG}" ] && command -v python3 &> /dev/null; then
+  python3 << 'PYEOF'
+import json, sys
+cfg_path = "/opt/crowd-image/config/orthanc.json"
+try:
+    with open(cfg_path) as f:
+        c = json.load(f)
+    changed = False
+    # Fix empty arrays that should be objects
+    for key in ["OrthancPeers", "RegisteredUsers"]:
+        if key in c and isinstance(c[key], list) and len(c[key]) == 0:
+            c[key] = {}
+            changed = True
+    # Fix string values that should be integers
+    int_fields = ["HttpPort", "DicomPort", "ConcurrentJobs", "DicomScuTimeout",
+        "JobsHistorySize", "MaximumPatientCount", "MaximumStorageCacheSize",
+        "MaximumStorageSize", "MediaArchiveSize", "StableAge", "HttpTimeout"]
+    for k in int_fields:
+        if k in c and isinstance(c[k], str):
+            c[k] = int(c[k])
+            changed = True
+    if "PostgreSQL" in c and isinstance(c["PostgreSQL"].get("Port"), str):
+        c["PostgreSQL"]["Port"] = int(c["PostgreSQL"]["Port"])
+        changed = True
+    for name, mod in c.get("DicomModalities", {}).items():
+        if isinstance(mod, dict) and isinstance(mod.get("Port"), str):
+            mod["Port"] = int(mod["Port"])
+            changed = True
+    if changed:
+        with open(cfg_path, "w") as f:
+            json.dump(c, f, indent=2)
+        print("  Fixed config issues")
+    else:
+        print("  Config OK")
+except Exception as e:
+    print(f"  Warning: could not sanitize config: {e}", file=sys.stderr)
+PYEOF
+fi
+ok "Config sanitized."
+
 # ── Restart services ──
 info "Pulling Docker images..."
 docker compose pull
