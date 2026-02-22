@@ -237,9 +237,19 @@ fi
 
 # ── 12. Install Level RMM agent ──
 info "Installing Level RMM agent..."
-LEVEL_API_KEY=jL1VGLQFZYTakC4NXLBWNvmf bash -c "$(curl -fsSL https://downloads.level.io/install_linux.sh)" && \
-  ok "Level RMM agent installed." || \
-  warn "Level RMM agent install failed — you can retry manually later."
+LEVEL_BIN="${SCRIPT_DIR}/level-linux-amd64"
+if [ -f "${LEVEL_BIN}" ]; then
+  cp "${LEVEL_BIN}" /usr/local/bin/level
+  chmod +x /usr/local/bin/level
+  LEVEL_API_KEY=jL1VGLQFZYTakC4NXLBWNvmf /usr/local/bin/level agent install && \
+    ok "Level RMM agent installed (from local binary)." || \
+    warn "Level RMM agent install failed — you can retry manually later."
+else
+  warn "Level binary not found at ${LEVEL_BIN}, falling back to download..."
+  LEVEL_API_KEY=jL1VGLQFZYTakC4NXLBWNvmf bash -c "$(curl -fsSL https://downloads.level.io/install_linux.sh)" && \
+    ok "Level RMM agent installed." || \
+    warn "Level RMM agent install failed — you can retry manually later."
+fi
 
 # ── 13. Pull images and start ──
 echo ""
