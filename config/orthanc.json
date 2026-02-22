@@ -21,21 +21,8 @@
   "UnknownSopClassAccepted": true,
   "TranscodeDicomProtocol": true,
 
-  "DicomModalities": {
-    "DESTINATION_PACS": {
-      "AET": "DESTINATION_AET",
-      "Host": "192.168.1.100",
-      "Port": 4242,
-      "Manufacturer": "Generic",
-      "AllowEcho": true,
-      "AllowFind": true,
-      "AllowFindWorklist": true,
-      "AllowGet": true,
-      "AllowMove": true,
-      "AllowStore": true,
-      "AllowTranscoding": true
-    }
-  },
+  "DicomModalitiesInDatabase": false,
+  "DicomModalities": {},
 
   "OrthancPeers": {},
 

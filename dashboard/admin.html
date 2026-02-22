@@ -672,8 +672,31 @@
       const body = { AET: aet, Host: host, Port: port };
       if (localAet) body.LocalAet = localAet;
       try {
+        // Update runtime
         await api('/modalities/' + encodeURIComponent(editName || name), {
           method: 'PUT', body: JSON.stringify(body)
+        });
+        // Persist to orthanc.json
+        const modalityJson = JSON.stringify(body);
+        const luaScript = `
+local f = io.open("/etc/orthanc/orthanc.json", "r")
+if not f then print("ERROR: Cannot read config") return end
+local content = f:read("*a")
+f:close()
+local config = ParseJson(content)
+if not config then print("ERROR: Cannot parse config") return end
+config.DicomModalities = config.DicomModalities or {}
+${editName && editName !== name ? `config.DicomModalities[${JSON.stringify(editName)}] = nil` : ''}
+config.DicomModalities[${JSON.stringify(editName || name)}] = ParseJson([==[${modalityJson}]==])
+local fw = io.open("/etc/orthanc/orthanc.json", "w")
+if not fw then print("ERROR: Cannot write config") return end
+fw:write(DumpJson(config, true))
+fw:close()
+print("OK")`;
+        await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript
         });
         toast(`Modality "${name}" saved`, 'success');
         closeModalityModal();
@@ -684,7 +707,28 @@
     async function deleteModality(name) {
       if (!confirm(`Delete modality "${name}"?`)) return;
       try {
+        // Update runtime
         await api('/modalities/' + encodeURIComponent(name), { method: 'DELETE' });
+        // Persist to orthanc.json
+        const luaScript = `
+local f = io.open("/etc/orthanc/orthanc.json", "r")
+if not f then print("ERROR: Cannot read config") return end
+local content = f:read("*a")
+f:close()
+local config = ParseJson(content)
+if not config then print("ERROR: Cannot parse config") return end
+config.DicomModalities = config.DicomModalities or {}
+config.DicomModalities[${JSON.stringify(name)}] = nil
+local fw = io.open("/etc/orthanc/orthanc.json", "w")
+if not fw then print("ERROR: Cannot write config") return end
+fw:write(DumpJson(config, true))
+fw:close()
+print("OK")`;
+        await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript
+        });
         toast(`Modality "${name}" deleted`, 'success');
         loadModalities();
       } catch (e) { toast('Failed to delete: ' + e.message, 'error'); }
