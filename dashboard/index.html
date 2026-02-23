@@ -576,8 +576,62 @@
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
       .toolbar { flex-direction: column; }
       .search-box { min-width: auto; width: 100%; }
+      .filter-row { gap: 8px; }
+      .filter-row select { flex: 1; min-width: 0; font-size: 12px; }
       .actions-cell { flex-wrap: wrap; }
     }
+
+    /* Filter row */
+    .filter-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .filter-row select {
+      padding: 8px 12px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235f6377'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 28px;
+    }
+
+    .filter-row select:focus { border-color: var(--blue); }
+
+    .filter-label {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .study-count {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-left: auto;
+    }
+
+    /* Sort indicators */
+    thead th[data-sort] { cursor: pointer; }
+    thead th[data-sort]:hover { color: var(--text); }
+    thead th .sort-arrow {
+      font-size: 10px;
+      opacity: 0.4;
+    }
+    thead th.sort-active { color: var(--blue-light); }
+    thead th.sort-active .sort-arrow { opacity: 1; }
 
     /* Scrollbar */
     ::-webkit-scrollbar { width: 6px; }
@@ -662,19 +716,39 @@
         <button class="btn btn-success" id="btnSendSelected" onclick="sendSelectedStudies()" disabled>Send Selected</button>
         <button class="btn btn-danger" id="btnDeleteSelected" onclick="deleteSelectedStudies()" disabled>Delete Selected</button>
       </div>
+      <div class="filter-row">
+        <span class="filter-label">Filter:</span>
+        <select id="filterModality" onchange="applyFilters()">
+          <option value="">All Modalities</option>
+        </select>
+        <select id="filterStatus" onchange="applyFilters()">
+          <option value="">All Statuses</option>
+          <option value="sent">Sent / Routed</option>
+          <option value="running">Running / Queued</option>
+          <option value="failed">Failed</option>
+          <option value="none">Not Forwarded</option>
+        </select>
+        <select id="filterDate" onchange="applyFilters()">
+          <option value="">All Dates</option>
+          <option value="today">Today</option>
+          <option value="7days">Last 7 Days</option>
+          <option value="30days">Last 30 Days</option>
+        </select>
+        <span class="study-count" id="studyCount"></span>
+      </div>
       <div class="table-container">
         <table>
           <thead>
             <tr>
-              <th style="width:40px"><input type="checkbox" class="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
-              <th>Patient</th>
-              <th>Study Date</th>
-              <th>Description</th>
-              <th>Modality</th>
-              <th>Accession</th>
-              <th>Series</th>
-              <th>Images</th>
-              <th>Actions</th>
+              <th style="width:40px;cursor:default;"><input type="checkbox" class="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+              <th data-sort="patient" onclick="toggleSort('patient')">Patient <span class="sort-arrow"></span></th>
+              <th data-sort="date" onclick="toggleSort('date')">Study Date <span class="sort-arrow"></span></th>
+              <th data-sort="description" onclick="toggleSort('description')">Description <span class="sort-arrow"></span></th>
+              <th data-sort="modality" onclick="toggleSort('modality')">Modality <span class="sort-arrow"></span></th>
+              <th data-sort="accession" onclick="toggleSort('accession')">Accession <span class="sort-arrow"></span></th>
+              <th data-sort="series" onclick="toggleSort('series')">Series <span class="sort-arrow"></span></th>
+              <th data-sort="images" onclick="toggleSort('images')">Images <span class="sort-arrow"></span></th>
+              <th style="cursor:default;">Actions</th>
             </tr>
           </thead>
           <tbody id="studiesBody">
@@ -851,6 +925,8 @@
     let searchTimeout = null;
     let studyJobMap = {}; // studyId -> { state, destination, progress }
     let studyRouteMap = {}; // studyId -> { status, dest, time } from routing log
+    let sortColumn = 'date';
+    let sortDirection = 'desc';
 
     // Navigation
     document.querySelectorAll('.nav-tab').forEach(tab => {
@@ -933,13 +1009,10 @@
           })
         });
 
-        studies = data.sort((a, b) => {
-          const dateA = a.MainDicomTags?.StudyDate || '';
-          const dateB = b.MainDicomTags?.StudyDate || '';
-          return dateB.localeCompare(dateA);
-        });
+        studies = data;
 
         await Promise.all([loadStudyJobs(), loadStudyRoutes()]);
+        populateModalityFilter();
         renderStudies();
       } catch (e) {
         toast('Failed to load studies: ' + e.message, 'error');
@@ -1003,18 +1076,175 @@
       }
     }
 
+    function getFilteredSortedStudies() {
+      let filtered = [...studies];
+
+      // Modality filter
+      const modalityFilter = document.getElementById('filterModality').value;
+      if (modalityFilter) {
+        filtered = filtered.filter(s => {
+          const mod = s.RequestedTags?.ModalitiesInStudy || s.MainDicomTags?.ModalitiesInStudy || '';
+          return mod.split('\\').some(m => m === modalityFilter);
+        });
+      }
+
+      // Status filter
+      const statusFilter = document.getElementById('filterStatus').value;
+      if (statusFilter) {
+        filtered = filtered.filter(s => {
+          const job = studyJobMap[s.ID];
+          const route = studyRouteMap[s.ID];
+          switch (statusFilter) {
+            case 'sent':
+              return (job && job.state === 'Success') || (route && route.status !== 'failed');
+            case 'running':
+              return job && (job.state === 'Running' || job.state === 'Pending' || job.state === 'Retry' || job.state === 'Paused');
+            case 'failed':
+              return (job && job.state === 'Failure') || (route && route.status === 'failed');
+            case 'none':
+              return !job && !route;
+            default:
+              return true;
+          }
+        });
+      }
+
+      // Date filter
+      const dateFilter = document.getElementById('filterDate').value;
+      if (dateFilter) {
+        const now = new Date();
+        const todayStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+        let cutoff = '';
+        if (dateFilter === 'today') {
+          cutoff = todayStr;
+        } else if (dateFilter === '7days') {
+          const d = new Date(now);
+          d.setDate(d.getDate() - 7);
+          cutoff = d.toISOString().slice(0, 10).replace(/-/g, '');
+        } else if (dateFilter === '30days') {
+          const d = new Date(now);
+          d.setDate(d.getDate() - 30);
+          cutoff = d.toISOString().slice(0, 10).replace(/-/g, '');
+        }
+        filtered = filtered.filter(s => {
+          const studyDate = s.MainDicomTags?.StudyDate || '';
+          if (dateFilter === 'today') return studyDate === cutoff;
+          return studyDate >= cutoff;
+        });
+      }
+
+      // Sort
+      filtered.sort((a, b) => {
+        let valA, valB;
+        switch (sortColumn) {
+          case 'patient':
+            valA = (a.PatientMainDicomTags?.PatientName || '').toLowerCase();
+            valB = (b.PatientMainDicomTags?.PatientName || '').toLowerCase();
+            break;
+          case 'date':
+            valA = a.MainDicomTags?.StudyDate || '';
+            valB = b.MainDicomTags?.StudyDate || '';
+            break;
+          case 'description':
+            valA = (a.MainDicomTags?.StudyDescription || '').toLowerCase();
+            valB = (b.MainDicomTags?.StudyDescription || '').toLowerCase();
+            break;
+          case 'modality':
+            valA = (a.RequestedTags?.ModalitiesInStudy || a.MainDicomTags?.ModalitiesInStudy || '').toLowerCase();
+            valB = (b.RequestedTags?.ModalitiesInStudy || b.MainDicomTags?.ModalitiesInStudy || '').toLowerCase();
+            break;
+          case 'accession':
+            valA = (a.MainDicomTags?.AccessionNumber || '').toLowerCase();
+            valB = (b.MainDicomTags?.AccessionNumber || '').toLowerCase();
+            break;
+          case 'series':
+            valA = parseInt(a.RequestedTags?.NumberOfStudyRelatedSeries || (a.Series || []).length) || 0;
+            valB = parseInt(b.RequestedTags?.NumberOfStudyRelatedSeries || (b.Series || []).length) || 0;
+            break;
+          case 'images':
+            valA = parseInt(a.RequestedTags?.NumberOfStudyRelatedInstances || 0) || 0;
+            valB = parseInt(b.RequestedTags?.NumberOfStudyRelatedInstances || 0) || 0;
+            break;
+          default:
+            valA = ''; valB = '';
+        }
+        let cmp;
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          cmp = valA - valB;
+        } else {
+          cmp = String(valA).localeCompare(String(valB));
+        }
+        return sortDirection === 'asc' ? cmp : -cmp;
+      });
+
+      return filtered;
+    }
+
+    function toggleSort(column) {
+      if (sortColumn === column) {
+        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortColumn = column;
+        sortDirection = column === 'date' ? 'desc' : 'asc';
+      }
+      updateSortIndicators();
+      renderStudies();
+    }
+
+    function updateSortIndicators() {
+      document.querySelectorAll('thead th[data-sort]').forEach(th => {
+        const arrow = th.querySelector('.sort-arrow');
+        if (th.dataset.sort === sortColumn) {
+          th.classList.add('sort-active');
+          arrow.textContent = sortDirection === 'asc' ? ' \u25B2' : ' \u25BC';
+        } else {
+          th.classList.remove('sort-active');
+          arrow.textContent = '';
+        }
+      });
+    }
+
+    function applyFilters() {
+      renderStudies();
+    }
+
+    function populateModalityFilter() {
+      const modalitySet = new Set();
+      for (const s of studies) {
+        const mod = s.RequestedTags?.ModalitiesInStudy || s.MainDicomTags?.ModalitiesInStudy || '';
+        mod.split('\\').forEach(m => { if (m) modalitySet.add(m); });
+      }
+      const sel = document.getElementById('filterModality');
+      const current = sel.value;
+      sel.innerHTML = '<option value="">All Modalities</option>' +
+        [...modalitySet].sort().map(m => `<option value="${m}"${m === current ? ' selected' : ''}>${m}</option>`).join('');
+    }
+
     function renderStudies() {
       const tbody = document.getElementById('studiesBody');
       const empty = document.getElementById('emptyStudies');
+      const displayStudies = getFilteredSortedStudies();
 
+      // Update study count
+      const countEl = document.getElementById('studyCount');
       if (studies.length === 0) {
+        countEl.textContent = '';
+      } else if (displayStudies.length === studies.length) {
+        countEl.textContent = studies.length + ' studies';
+      } else {
+        countEl.textContent = displayStudies.length + ' of ' + studies.length + ' studies';
+      }
+
+      updateSortIndicators();
+
+      if (displayStudies.length === 0) {
         tbody.innerHTML = '';
         empty.style.display = 'block';
         return;
       }
 
       empty.style.display = 'none';
-      tbody.innerHTML = studies.map(s => {
+      tbody.innerHTML = displayStudies.map(s => {
         const t = s.MainDicomTags || {};
         const rt = s.RequestedTags || {};
         const ps = s.PatientMainDicomTags || {};
@@ -1137,7 +1367,7 @@
     function toggleSelectAll() {
       const checked = document.getElementById('selectAll').checked;
       selectedStudies.clear();
-      if (checked) studies.forEach(s => selectedStudies.add(s.ID));
+      if (checked) getFilteredSortedStudies().forEach(s => selectedStudies.add(s.ID));
       renderStudies();
       updateBulkButtons();
     }
