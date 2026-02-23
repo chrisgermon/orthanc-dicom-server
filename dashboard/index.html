@@ -850,6 +850,7 @@
     let modalities = {};
     let searchTimeout = null;
     let studyJobMap = {}; // studyId -> { state, destination, progress }
+    let studyRouteMap = {}; // studyId -> { status, dest, time } from routing log
 
     // Navigation
     document.querySelectorAll('.nav-tab').forEach(tab => {
@@ -938,10 +939,32 @@
           return dateB.localeCompare(dateA);
         });
 
-        await loadStudyJobs();
+        await Promise.all([loadStudyJobs(), loadStudyRoutes()]);
         renderStudies();
       } catch (e) {
         toast('Failed to load studies: ' + e.message, 'error');
+      }
+    }
+
+    // Build a map of study ID -> routing log entry (persistent forwarding history)
+    async function loadStudyRoutes() {
+      try {
+        const res = await fetch('/manage/routing-log.json');
+        if (!res.ok) return;
+        const log = await res.json();
+        studyRouteMap = {};
+        // Process in order so latest entry per study wins
+        for (const entry of log) {
+          if (!entry.study) continue;
+          studyRouteMap[entry.study] = {
+            status: entry.status || 'sent',
+            dest: entry.dest || '',
+            time: entry.time || '',
+            rule: entry.rule || ''
+          };
+        }
+      } catch (e) {
+        // Non-critical
       }
     }
 
@@ -996,12 +1019,15 @@
         const rt = s.RequestedTags || {};
         const ps = s.PatientMainDicomTags || {};
         const date = formatDate(t.StudyDate);
+        const time = formatTime(t.StudyTime);
         const modality = rt.ModalitiesInStudy || t.ModalitiesInStudy || '';
         const numSeries = rt.NumberOfStudyRelatedSeries || (s.Series || []).length;
         const numInstances = rt.NumberOfStudyRelatedInstances || '-';
         const checked = selectedStudies.has(s.ID) ? 'checked' : '';
 
+        // Determine forwarding status: prefer live job, fall back to routing log
         const job = studyJobMap[s.ID];
+        const route = studyRouteMap[s.ID];
         let rowClass = '';
         let fwdIcon = '';
         if (job) {
@@ -1024,6 +1050,16 @@
           } else if (st === 'Paused') {
             fwdIcon = `<span class="fwd-icon pending" title="Paused sending to ${escHtml(job.destination)}">&#9208; Paused</span>`;
           }
+        } else if (route) {
+          // No active job, but routing log has a record
+          const routeTime = formatJobTime(route.time);
+          if (route.status === 'failed') {
+            rowClass = 'forwarded-failure';
+            fwdIcon = `<span class="fwd-icon failure" title="Failed to ${escHtml(route.dest)}${routeTime ? ' on ' + routeTime : ''}">&#10007; Failed</span>`;
+          } else {
+            rowClass = 'forwarded-success';
+            fwdIcon = `<span class="fwd-icon success" title="Routed to ${escHtml(route.dest)}${routeTime ? ' on ' + routeTime : ''} (${escHtml(route.rule)})">&#10003; Routed</span>`;
+          }
         }
 
         let progressBar = '';
@@ -1043,7 +1079,7 @@
             <div class="study-desc">${escHtml(ps.PatientID || '')}</div>
             ${progressBar}
           </td>
-          <td>${date}</td>
+          <td>${date}${time ? '<div class="study-desc">' + time + '</div>' : ''}</td>
           <td class="study-desc">${escHtml(t.StudyDescription || '-')}</td>
           <td>${modality.split('\\').map(m => '<span class="modality-badge">' + escHtml(m) + '</span>').join(' ')}</td>
           <td style="font-size:12px;color:var(--text-muted)">${escHtml(t.AccessionNumber || '-')}</td>
@@ -1064,6 +1100,14 @@
     function formatDate(d) {
       if (!d || d.length !== 8) return d || '-';
       return d.slice(0,4) + '-' + d.slice(4,6) + '-' + d.slice(6,8);
+    }
+
+    function formatTime(t) {
+      if (!t || t.length < 4) return '';
+      // DICOM time format: HHMMSS.fff or HHMM
+      const h = t.slice(0,2);
+      const m = t.slice(2,4);
+      return h + ':' + m;
     }
 
     function formatJobTime(t) {
@@ -1197,7 +1241,7 @@
 
     function scheduleBgPoll() {
       bgPollTimer = setTimeout(async () => {
-        await loadStudyJobs();
+        await Promise.all([loadStudyJobs(), loadStudyRoutes()]);
         renderStudies();
         const hasActive = Object.values(studyJobMap).some(j =>
           j.state === 'Running' || j.state === 'Pending' || j.state === 'Retry'
