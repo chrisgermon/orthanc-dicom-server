@@ -232,14 +232,23 @@ function OnStableStudy(studyId, tags, metadata)
 
       if match and rule.destination and rule.destination ~= "" then
         print("Auto-routing study " .. studyId .. " to " .. rule.destination .. " (rule: " .. (rule.name or "?") .. ")")
-        local ok, err = pcall(function()
-          RestApiPost("/modalities/" .. rule.destination .. "/store", '{"Resources":["' .. studyId .. '"],"Asynchronous":true}')
+        local ok, result = pcall(function()
+          return RestApiPost("/modalities/" .. rule.destination .. "/store", '{"Resources":["' .. studyId .. '"],"Asynchronous":true}')
         end)
         if ok then
-          AppendRoutingLog(studyId, rule.name, rule.destination, "sent", "", callingAet, calledAet, description, modality)
+          -- Extract job ID from async response to track real status
+          local jobId = nil
+          if result then
+            local jok, jdata = pcall(ParseJson, result)
+            if jok and jdata and jdata.ID then
+              jobId = jdata.ID
+            end
+          end
+          AppendRoutingLog(studyId, rule.name, rule.destination, "queued", "", callingAet, calledAet, description, modality)
+          print("Auto-routing job queued for " .. studyId .. (jobId and (" (job " .. jobId .. ")") or ""))
         else
           print("Auto-routing failed for " .. studyId .. ": " .. tostring(err))
-          AppendRoutingLog(studyId, rule.name, rule.destination, "failed", tostring(err), callingAet, calledAet, description, modality)
+          AppendRoutingLog(studyId, rule.name, rule.destination, "failed", tostring(result), callingAet, calledAet, description, modality)
         end
       end
     end
