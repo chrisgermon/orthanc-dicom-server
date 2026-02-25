@@ -988,26 +988,48 @@
     async function loadStudies() {
       try {
         const searchQuery = document.getElementById('searchInput').value.trim();
-        let query = {};
-        if (searchQuery) {
-          query = {
-            PatientName: '*' + searchQuery + '*',
-            PatientID: '*' + searchQuery + '*',
-            StudyDescription: '*' + searchQuery + '*',
-            AccessionNumber: '*' + searchQuery + '*'
-          };
-        }
+        let data;
 
-        const data = await api('/tools/find', {
-          method: 'POST',
-          body: JSON.stringify({
-            Level: 'Study',
-            Query: query,
-            Expand: true,
-            CaseSensitive: false,
-            RequestedTags: ['ModalitiesInStudy', 'NumberOfStudyRelatedInstances', 'NumberOfStudyRelatedSeries']
-          })
-        });
+        if (searchQuery) {
+          // Search each field independently and merge results (OR logic).
+          // Orthanc /tools/find uses AND when multiple query fields are set,
+          // so we run parallel queries per field and deduplicate by study ID.
+          const fields = ['PatientName', 'PatientID', 'StudyDescription', 'AccessionNumber'];
+          const requests = fields.map(field =>
+            api('/tools/find', {
+              method: 'POST',
+              body: JSON.stringify({
+                Level: 'Study',
+                Query: { [field]: '*' + searchQuery + '*' },
+                Expand: true,
+                CaseSensitive: false,
+                RequestedTags: ['ModalitiesInStudy', 'NumberOfStudyRelatedInstances', 'NumberOfStudyRelatedSeries']
+              })
+            }).catch(() => [])
+          );
+          const results = await Promise.all(requests);
+          const seen = new Set();
+          data = [];
+          for (const arr of results) {
+            for (const study of arr) {
+              if (!seen.has(study.ID)) {
+                seen.add(study.ID);
+                data.push(study);
+              }
+            }
+          }
+        } else {
+          data = await api('/tools/find', {
+            method: 'POST',
+            body: JSON.stringify({
+              Level: 'Study',
+              Query: {},
+              Expand: true,
+              CaseSensitive: false,
+              RequestedTags: ['ModalitiesInStudy', 'NumberOfStudyRelatedInstances', 'NumberOfStudyRelatedSeries']
+            })
+          });
+        }
 
         studies = data;
 
