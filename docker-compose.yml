@@ -97,6 +97,7 @@ services:
     environment:
       - ORTHANC__POSTGRESQL__HOST=postgres
       - VERBOSE_ENABLED=true
+      - TZ=Australia/Brisbane
     depends_on:
       postgres:
         condition: service_healthy
