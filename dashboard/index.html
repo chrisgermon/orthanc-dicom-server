@@ -746,6 +746,7 @@
               <th data-sort="description" onclick="toggleSort('description')">Description <span class="sort-arrow"></span></th>
               <th data-sort="modality" onclick="toggleSort('modality')">Modality <span class="sort-arrow"></span></th>
               <th data-sort="accession" onclick="toggleSort('accession')">Accession <span class="sort-arrow"></span></th>
+              <th data-sort="source" onclick="toggleSort('source')">Source <span class="sort-arrow"></span></th>
               <th data-sort="received" onclick="toggleSort('received')">Received <span class="sort-arrow"></span></th>
               <th data-sort="series" onclick="toggleSort('series')">Series <span class="sort-arrow"></span></th>
               <th data-sort="images" onclick="toggleSort('images')">Images <span class="sort-arrow"></span></th>
@@ -1037,6 +1038,9 @@
         await Promise.all([loadStudyJobs(), loadStudyRoutes()]);
         populateModalityFilter();
         renderStudies();
+
+        // Enrich studies with source AET in the background (from instance metadata)
+        loadStudySourceAets();
       } catch (e) {
         toast('Failed to load studies: ' + e.message, 'error');
       }
@@ -1097,6 +1101,32 @@
       } catch (e) {
         // Non-critical, just skip
       }
+    }
+
+    // Fetch source AET for each study from first instance metadata
+    async function loadStudySourceAets() {
+      const batch = studies.slice();
+      const CONCURRENCY = 6;
+      let i = 0;
+      let changed = false;
+      async function next() {
+        while (i < batch.length) {
+          const s = batch[i++];
+          if (s._sourceAet !== undefined) continue;
+          const series = s.Series || [];
+          if (!series.length) { s._sourceAet = ''; continue; }
+          try {
+            const ser = await api('/series/' + series[0]);
+            const instId = (ser.Instances || [])[0];
+            if (!instId) { s._sourceAet = ''; continue; }
+            const meta = await api('/instances/' + instId + '/metadata?expand');
+            s._sourceAet = meta.RemoteAET || '';
+            changed = true;
+          } catch (e) { s._sourceAet = ''; }
+        }
+      }
+      await Promise.all(Array.from({ length: CONCURRENCY }, () => next()));
+      if (changed) renderStudies();
     }
 
     function getFilteredSortedStudies() {
@@ -1179,6 +1209,10 @@
           case 'accession':
             valA = (a.MainDicomTags?.AccessionNumber || '').toLowerCase();
             valB = (b.MainDicomTags?.AccessionNumber || '').toLowerCase();
+            break;
+          case 'source':
+            valA = (a._sourceAet || '').toLowerCase();
+            valB = (b._sourceAet || '').toLowerCase();
             break;
           case 'received':
             valA = a.LastUpdate || '';
@@ -1340,6 +1374,7 @@
           <td class="study-desc">${escHtml(t.StudyDescription || '-')}</td>
           <td>${modality.split('\\').map(m => '<span class="modality-badge">' + escHtml(m) + '</span>').join(' ')}</td>
           <td style="font-size:12px;color:var(--text-muted)">${escHtml(t.AccessionNumber || '-')}</td>
+          <td style="font-size:12px;color:var(--text-muted)">${escHtml(s._sourceAet || '')}</td>
           <td style="font-size:12px;color:var(--text-muted)">${formatJobTime(s.LastUpdate)}</td>
           <td>${numSeries}</td>
           <td>${numInstances}</td>
