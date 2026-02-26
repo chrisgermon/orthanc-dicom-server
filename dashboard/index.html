@@ -746,6 +746,7 @@
               <th data-sort="description" onclick="toggleSort('description')">Description <span class="sort-arrow"></span></th>
               <th data-sort="modality" onclick="toggleSort('modality')">Modality <span class="sort-arrow"></span></th>
               <th data-sort="accession" onclick="toggleSort('accession')">Accession <span class="sort-arrow"></span></th>
+              <th data-sort="received" onclick="toggleSort('received')">Received <span class="sort-arrow"></span></th>
               <th data-sort="series" onclick="toggleSort('series')">Series <span class="sort-arrow"></span></th>
               <th data-sort="images" onclick="toggleSort('images')">Images <span class="sort-arrow"></span></th>
               <th style="cursor:default;">Actions</th>
@@ -1179,6 +1180,10 @@
             valA = (a.MainDicomTags?.AccessionNumber || '').toLowerCase();
             valB = (b.MainDicomTags?.AccessionNumber || '').toLowerCase();
             break;
+          case 'received':
+            valA = a.LastUpdate || '';
+            valB = b.LastUpdate || '';
+            break;
           case 'series':
             valA = parseInt(a.RequestedTags?.NumberOfStudyRelatedSeries || (a.Series || []).length) || 0;
             valB = parseInt(b.RequestedTags?.NumberOfStudyRelatedSeries || (b.Series || []).length) || 0;
@@ -1335,6 +1340,7 @@
           <td class="study-desc">${escHtml(t.StudyDescription || '-')}</td>
           <td>${modality.split('\\').map(m => '<span class="modality-badge">' + escHtml(m) + '</span>').join(' ')}</td>
           <td style="font-size:12px;color:var(--text-muted)">${escHtml(t.AccessionNumber || '-')}</td>
+          <td style="font-size:12px;color:var(--text-muted)">${formatJobTime(s.LastUpdate)}</td>
           <td>${numSeries}</td>
           <td>${numInstances}</td>
           <td>
