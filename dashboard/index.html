@@ -728,9 +728,9 @@
           <option value="failed">Failed</option>
           <option value="none">Not Forwarded</option>
         </select>
-        <select id="filterDate" onchange="applyFilters()">
+        <select id="filterDate" onchange="loadStudies()">
           <option value="">All Dates</option>
-          <option value="today">Today</option>
+          <option value="today" selected>Today</option>
           <option value="7days">Last 7 Days</option>
           <option value="30days">Last 30 Days</option>
         </select>
@@ -986,10 +986,25 @@
       }
     }
 
+    // Build StudyDate query string from the date filter dropdown
+    function getDateQueryValue() {
+      const dateFilter = document.getElementById('filterDate').value;
+      if (!dateFilter) return '';
+      const now = new Date();
+      const fmt = d => d.toISOString().slice(0, 10).replace(/-/g, '');
+      if (dateFilter === 'today') return fmt(now);
+      const cutoff = new Date(now);
+      if (dateFilter === '7days') cutoff.setDate(cutoff.getDate() - 7);
+      else if (dateFilter === '30days') cutoff.setDate(cutoff.getDate() - 30);
+      else return '';
+      return fmt(cutoff) + '-' + fmt(now);
+    }
+
     // Load studies
     async function loadStudies() {
       try {
         const searchQuery = document.getElementById('searchInput').value.trim();
+        const dateQuery = getDateQueryValue();
         let data;
 
         if (searchQuery) {
@@ -997,18 +1012,20 @@
           // Orthanc /tools/find uses AND when multiple query fields are set,
           // so we run parallel queries per field and deduplicate by study ID.
           const fields = ['PatientName', 'PatientID', 'StudyDescription', 'AccessionNumber'];
-          const requests = fields.map(field =>
-            api('/tools/find', {
+          const requests = fields.map(field => {
+            const query = { [field]: '*' + searchQuery + '*' };
+            if (dateQuery) query.StudyDate = dateQuery;
+            return api('/tools/find', {
               method: 'POST',
               body: JSON.stringify({
                 Level: 'Study',
-                Query: { [field]: '*' + searchQuery + '*' },
+                Query: query,
                 Expand: true,
                 CaseSensitive: false,
                 RequestedTags: ['ModalitiesInStudy', 'NumberOfStudyRelatedInstances', 'NumberOfStudyRelatedSeries']
               })
-            }).catch(() => [])
-          );
+            }).catch(() => []);
+          });
           const results = await Promise.all(requests);
           const seen = new Set();
           data = [];
@@ -1021,11 +1038,13 @@
             }
           }
         } else {
+          const query = {};
+          if (dateQuery) query.StudyDate = dateQuery;
           data = await api('/tools/find', {
             method: 'POST',
             body: JSON.stringify({
               Level: 'Study',
-              Query: {},
+              Query: query,
               Expand: true,
               CaseSensitive: false,
               RequestedTags: ['ModalitiesInStudy', 'NumberOfStudyRelatedInstances', 'NumberOfStudyRelatedSeries']
@@ -1162,29 +1181,7 @@
         });
       }
 
-      // Date filter
-      const dateFilter = document.getElementById('filterDate').value;
-      if (dateFilter) {
-        const now = new Date();
-        const todayStr = now.toISOString().slice(0, 10).replace(/-/g, '');
-        let cutoff = '';
-        if (dateFilter === 'today') {
-          cutoff = todayStr;
-        } else if (dateFilter === '7days') {
-          const d = new Date(now);
-          d.setDate(d.getDate() - 7);
-          cutoff = d.toISOString().slice(0, 10).replace(/-/g, '');
-        } else if (dateFilter === '30days') {
-          const d = new Date(now);
-          d.setDate(d.getDate() - 30);
-          cutoff = d.toISOString().slice(0, 10).replace(/-/g, '');
-        }
-        filtered = filtered.filter(s => {
-          const studyDate = s.MainDicomTags?.StudyDate || '';
-          if (dateFilter === 'today') return studyDate === cutoff;
-          return studyDate >= cutoff;
-        });
-      }
+      // Date filter is applied server-side in loadStudies()
 
       // Sort
       filtered.sort((a, b) => {
