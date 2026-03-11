@@ -115,12 +115,22 @@ end
 function MatchesFilter(value, filter)
   if not filter or filter == "" then return true end
   if not value then return false end
+  -- Support "!" prefix for negation (e.g. "!AURVCMOD3" excludes that AET)
+  local negate = false
+  local pattern = filter
+  if pattern:sub(1, 1) == "!" then
+    negate = true
+    pattern = pattern:sub(2)
+  end
+  if pattern == "" then return true end
   local lv = string.lower(value)
-  local lf = string.lower(filter)
+  local lf = string.lower(pattern)
   lf = lf:gsub("%%", "%%%%")
   lf = lf:gsub("%.", "%%.")
   lf = lf:gsub("%*", ".*")
-  return string.find(lv, lf) ~= nil
+  local found = string.find(lv, lf) ~= nil
+  if negate then return not found end
+  return found
 end
 
 STORAGE_SETTINGS_PATH = "/var/lib/orthanc/storage-settings.json"
@@ -212,14 +222,18 @@ function OnStableStudy(studyId, tags, metadata)
   local modality = mainTags.ModalitiesInStudy or ""
   local description = mainTags.StudyDescription or ""
 
+  -- Fetch CallingAet/CalledAet from instance metadata (not available in OnStableStudy metadata)
   local callingAet = ""
-  if metadata and metadata.CallingAet then
-    callingAet = metadata.CallingAet
-  end
-
   local calledAet = ""
-  if metadata and metadata.CalledAet then
-    calledAet = metadata.CalledAet
+  local instances = study.Instances or {}
+  if #instances > 0 then
+    local ok, instMeta = pcall(function()
+      return ParseJson(RestApiGet("/instances/" .. instances[1] .. "/metadata?expand"))
+    end)
+    if ok and instMeta then
+      callingAet = instMeta.RemoteAET or ""
+      calledAet = instMeta.CalledAET or ""
+    end
   end
 
   for _, rule in ipairs(ROUTING_RULES) do
@@ -233,21 +247,13 @@ function OnStableStudy(studyId, tags, metadata)
       if match and rule.destination and rule.destination ~= "" then
         print("Auto-routing study " .. studyId .. " to " .. rule.destination .. " (rule: " .. (rule.name or "?") .. ")")
         local ok, result = pcall(function()
-          return RestApiPost("/modalities/" .. rule.destination .. "/store", '{"Resources":["' .. studyId .. '"],"Asynchronous":true}')
+          return RestApiPost("/modalities/" .. rule.destination .. "/store", studyId)
         end)
         if ok then
-          -- Extract job ID from async response to track real status
-          local jobId = nil
-          if result then
-            local jok, jdata = pcall(ParseJson, result)
-            if jok and jdata and jdata.ID then
-              jobId = jdata.ID
-            end
-          end
-          AppendRoutingLog(studyId, rule.name, rule.destination, "queued", "", callingAet, calledAet, description, modality)
-          print("Auto-routing job queued for " .. studyId .. (jobId and (" (job " .. jobId .. ")") or ""))
+          AppendRoutingLog(studyId, rule.name, rule.destination, "sent", "", callingAet, calledAet, description, modality)
+          print("Auto-routing sent study " .. studyId .. " to " .. rule.destination)
         else
-          print("Auto-routing failed for " .. studyId .. ": " .. tostring(err))
+          print("Auto-routing failed for " .. studyId .. ": " .. tostring(result))
           AppendRoutingLog(studyId, rule.name, rule.destination, "failed", tostring(result), callingAet, calledAet, description, modality)
         end
       end

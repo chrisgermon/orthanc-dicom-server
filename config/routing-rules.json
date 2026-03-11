@@ -1,1 +1,1 @@
-[]
+[{"name":"All to PACS","enabled":true,"destination":"PACS","filterModality":"","filterDescription":"","filterCallingAet":"!AURVCMOD3","filterCalledAet":""}]

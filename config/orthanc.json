@@ -1,73 +1,69 @@
 {
-  "Name": "OrthancLocal",
-  "StorageDirectory": "/var/lib/orthanc/db",
-  "StorageCompression": false,
-  "MaximumStorageSize": 0,
-  "MaximumPatientCount": 0,
-  "MaximumStorageCacheSize": 128,
-
-  "HttpServerEnabled": true,
-  "HttpPort": 8042,
-  "RemoteAccessAllowed": true,
   "AuthenticationEnabled": false,
-  "RegisteredUsers": {},
-
-  "DicomServerEnabled": true,
-  "DicomAet": "ORTHANC",
-  "DicomPort": 11112,
+  "ConcurrentJobs": 2,
+  "DicomAet": "LOGGATEWAY",
+  "DicomAlwaysAllowEcho": true,
+  "DicomAlwaysAllowFind": true,
+  "DicomAlwaysAllowGet": true,
+  "DicomAlwaysAllowMove": true,
+  "DicomAlwaysAllowStore": true,
   "DicomCheckCalledAet": false,
   "DicomCheckModalityHost": false,
-
-  "UnknownSopClassAccepted": true,
-  "TranscodeDicomProtocol": true,
-
+  "DicomModalities": {
+    "PACS": {
+      "AET": "AURVCMOD3",
+      "Host": "10.17.1.23",
+      "Port": 5000
+    }
+  },
   "DicomModalitiesInDatabase": false,
-  "DicomModalities": {},
-
-  "OrthancPeers": {},
-
-  "ConcurrentJobs": 2,
-  "JobsHistorySize": 100,
-
+  "DicomPort": 11112,
+  "DicomScuPreferredTransferSyntax": "1.2.840.10008.1.2.1",
+  "DicomScuTimeout": 30,
+  "DicomServerEnabled": true,
   "DicomWeb": {
     "Enable": true,
-    "Root": "/dicom-web/",
     "EnableWado": true,
-    "WadoRoot": "/wado",
     "Host": "0.0.0.0",
+    "Root": "/dicom-web/",
+    "SeriesMetadata": "Full",
     "Ssl": false,
     "StudiesMetadata": "Full",
-    "SeriesMetadata": "Full"
+    "WadoRoot": "/wado"
   },
-
+  "ExecuteLuaEnabled": true,
+  "HttpPort": 8042,
+  "HttpServerEnabled": true,
+  "HttpTimeout": 60,
+  "JobsHistorySize": 100,
+  "KeepAlive": true,
+  "LuaScripts": ["/etc/orthanc/autoforward.lua"],
+  "MaximumPatientCount": 0,
+  "MaximumStorageCacheSize": 128,
+  "MaximumStorageSize": 0,
+  "MediaArchiveSize": 1,
+  "Name": "OrthancLocal",
+  "OrthancPeers": {},
+  "OverwriteInstances": false,
+  "Plugins": ["/usr/share/orthanc/plugins/"],
   "PostgreSQL": {
+    "Database": "orthanc",
     "EnableIndex": true,
+    "EnableSsl": false,
     "EnableStorage": false,
     "Host": "postgres",
+    "Lock": false,
+    "Password": "7IV6OCop3S3VbtIWPeaMcT9jV5efB7UY",
     "Port": 5432,
-    "Database": "orthanc",
-    "Username": "orthanc",
-    "Password": "orthanc-secure-change-me",
-    "EnableSsl": false,
-    "Lock": false
+    "Username": "orthanc"
   },
-
-  "LuaScripts": ["/etc/orthanc/autoforward.lua"],
-  "ExecuteLuaEnabled": true,
-
-  "KeepAlive": true,
-  "TcpNoDelay": true,
-  "HttpTimeout": 60,
-  "DicomScuTimeout": 30,
-  "DicomScuPreferredTransferSyntax": "1.2.840.10008.1.2.1",
-
-  "StableAge": 60,
+  "RegisteredUsers": {},
+  "RemoteAccessAllowed": true,
+  "StableAge": 30,
   "StorageAccessOnFind": "Always",
-
-  "OverwriteInstances": false,
-  "MediaArchiveSize": 1,
-
-  "Plugins": [
-    "/usr/share/orthanc/plugins/"
-  ]
+  "StorageCompression": false,
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "TcpNoDelay": true,
+  "TranscodeDicomProtocol": true,
+  "UnknownSopClassAccepted": true
 }
