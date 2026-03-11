@@ -1,7 +1,7 @@
 {
   "AuthenticationEnabled": false,
   "ConcurrentJobs": 2,
-  "DicomAet": "LOGGATEWAY",
+  "DicomAet": "CROWDROUTE",
   "DicomAlwaysAllowEcho": true,
   "DicomAlwaysAllowFind": true,
   "DicomAlwaysAllowGet": true,
@@ -9,12 +9,9 @@
   "DicomAlwaysAllowStore": true,
   "DicomCheckCalledAet": false,
   "DicomCheckModalityHost": false,
-  "DicomModalities": {
-    "PACS": {
-      "AET": "AURVCMOD3",
-      "Host": "10.17.1.23",
-      "Port": 5000
-    }
+  "DicomModalities" : {
+    "AVIEW-Coreline" : {"AET":"AVIEW","Host":"192.168.68.240","Port":1040,"LocalAet":"AURVCMOD1"},
+    "PACS" : {"AET":"AURVCMOD3","Host":"10.17.1.23","Port":5000}
   },
   "DicomModalitiesInDatabase": false,
   "DicomPort": 11112,

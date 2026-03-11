@@ -11,5 +11,9 @@ windows-installer/*.spec
 # Downloaded Orthanc binaries (191MB — download via build script)
 windows-installer/resources/OrthancInstaller-Win64.exe
 
+# Dynamic config files
+config/network-status.json
+config/pending-network-config.json
+
 # macOS
 .DS_Store

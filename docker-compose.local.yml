@@ -1,0 +1,31 @@
+# docker-compose.local.yml
+# Local development override — runs everything over plain HTTP, no TLS certs needed.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up
+#
+# Services exposed:
+#   http://localhost       → Dashboard / management UI (via nginx HTTP)
+#   http://localhost:8042  → Orthanc Explorer 2 (direct)
+#   http://localhost:3000  → OHIF Viewer (direct)
+#   DICOM port 11112       → Orthanc DICOM listener
+#
+services:
+  nginx:
+    ports:
+      - "80:80"     # HTTP only for local dev
+    volumes:
+      - ./nginx/nginx.local.conf:/etc/nginx/nginx.conf:ro   # HTTP-only config
+      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+      - ./dashboard:/usr/share/nginx/html/dashboard
+      - ./config/routing-log.json:/usr/share/nginx/html/dashboard/routing-log.json
+      # Override: remove the certs volume (not needed for HTTP)
+
+  orthanc:
+    ports:
+      - "11112:11112"   # DICOM
+      - "8042:8042"     # Orthanc Explorer 2 direct access
+
+  ohif:
+    ports:
+      - "3000:80"       # OHIF direct access

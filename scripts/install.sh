@@ -139,20 +139,41 @@ fi
 
 mkdir -p "${INSTALL_DIR}"
 
-# ── 5. Copy project files ──
+# ── 5. Copy or Clone project files ──
 info "Setting up project files in ${INSTALL_DIR}..."
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-# Copy all project files
-cp -r "${PROJECT_DIR}/config" "${INSTALL_DIR}/"
-cp -r "${PROJECT_DIR}/dashboard" "${INSTALL_DIR}/"
-cp -r "${PROJECT_DIR}/nginx" "${INSTALL_DIR}/"
-cp -r "${PROJECT_DIR}/scripts" "${INSTALL_DIR}/"
-cp "${PROJECT_DIR}/docker-compose.yml" "${INSTALL_DIR}/"
-cp "${PROJECT_DIR}/.env.example" "${INSTALL_DIR}/"
+if [ -f "${PROJECT_DIR}/docker-compose.yml" ]; then
+  info "Local project files found. Copying..."
+  cp -r "${PROJECT_DIR}/config" "${INSTALL_DIR}/"
+  cp -r "${PROJECT_DIR}/dashboard" "${INSTALL_DIR}/"
+  cp -r "${PROJECT_DIR}/nginx" "${INSTALL_DIR}/"
+  cp -r "${PROJECT_DIR}/scripts" "${INSTALL_DIR}/"
+  cp "${PROJECT_DIR}/docker-compose.yml" "${INSTALL_DIR}/"
+  cp "${PROJECT_DIR}/.env.example" "${INSTALL_DIR}/"
+else
+  info "Downloading from git repository..."
+  REPO_URL="https://github.com/chrisgermon/orthanc-dicom-server.git"
+  
+  # Ensure git is installed
+  if ! command -v git &> /dev/null; then
+    apt-get install -y -qq git > /dev/null 2>&1
+  fi
+
+  rm -rf /tmp/crowd-image-setup
+  git clone "${REPO_URL}" /tmp/crowd-image-setup
+  cp -r /tmp/crowd-image-setup/config "${INSTALL_DIR}/"
+  cp -r /tmp/crowd-image-setup/dashboard "${INSTALL_DIR}/"
+  cp -r /tmp/crowd-image-setup/nginx "${INSTALL_DIR}/"
+  cp -r /tmp/crowd-image-setup/scripts "${INSTALL_DIR}/"
+  cp /tmp/crowd-image-setup/docker-compose.yml "${INSTALL_DIR}/"
+  cp /tmp/crowd-image-setup/.env.example "${INSTALL_DIR}/"
+  rm -rf /tmp/crowd-image-setup
+fi
+
 mkdir -p "${INSTALL_DIR}/certs"
-ok "Project files copied."
+ok "Project files ready."
 
 # ── 6. Generate SSL certificates ──
 if [ -f "${INSTALL_DIR}/certs/server.crt" ] && [ -f "${INSTALL_DIR}/certs/server.key" ]; then
