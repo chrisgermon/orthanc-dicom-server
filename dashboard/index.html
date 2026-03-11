@@ -663,6 +663,7 @@
       <nav class="nav-tabs">
         <button class="nav-tab active" data-section="studies">Studies</button>
         <button class="nav-tab" data-section="upload">Upload</button>
+        <button class="nav-tab" data-section="qr">Query/Retrieve</button>
         <button class="nav-tab" data-section="modalities">Modalities</button>
         <button class="nav-tab" data-section="jobs">Jobs</button>
         <button class="nav-tab" data-section="reports">Reports</button>
@@ -787,6 +788,67 @@
         </div>
         <div class="progress-bar"><div class="fill" id="uploadFill" style="width:0%"></div></div>
         <div style="font-size:11px;color:var(--text-dim);margin-top:6px;" id="uploadDetail"></div>
+      </div>
+    </section>
+
+    <!-- Query / Retrieve Section -->
+    <section class="section" id="sec-qr">
+      <div class="section-header">
+        <h2 class="section-title">Query / Retrieve</h2>
+      </div>
+      <div class="form-group" style="display: flex; gap: 12px; align-items: flex-end; margin-bottom: 24px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 180px;">
+          <label>Target Modality</label>
+          <select id="qrTargetModality" style="cursor:pointer;"></select>
+        </div>
+        <div style="flex: 1; min-width: 140px;">
+          <label>Patient ID</label>
+          <input type="text" id="qrPatientId" placeholder="* (All)">
+        </div>
+        <div style="flex: 1; min-width: 140px;">
+          <label>Patient Name</label>
+          <input type="text" id="qrPatientName" placeholder="* (All)">
+        </div>
+        <div style="flex: 1; min-width: 140px;">
+          <label>Accession</label>
+          <input type="text" id="qrAccession" placeholder="* (All)">
+        </div>
+        <div style="flex: 1; min-width: 140px;">
+          <label>Study Date</label>
+          <input type="text" id="qrDate" placeholder="YYYYMMDD or Range">
+        </div>
+        <div style="flex: 1; min-width: 140px;">
+          <label>Modality</label>
+          <input type="text" id="qrModality" placeholder="* (All)">
+        </div>
+        <div style="flex: 1; min-width: 140px;">
+          <label>Description</label>
+          <input type="text" id="qrStudyDesc" placeholder="* (All)">
+        </div>
+        <div style="min-width: 120px;">
+          <button class="btn btn-primary" style="width: 100%; height: 42px;" onclick="runQueryRetrieve()">Search</button>
+        </div>
+      </div>
+      
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Patient</th>
+              <th>Date</th>
+              <th>Description</th>
+              <th>Modality</th>
+              <th>Accession</th>
+              <th style="width: 100px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="qrBody"></tbody>
+        </table>
+        <div class="empty-state" id="emptyQr" style="display:none;">
+          <div class="icon">&#128269;</div>
+          <h3>No results</h3>
+          <p>Run a query to find remote studies.</p>
+        </div>
       </div>
     </section>
 
@@ -939,6 +1001,7 @@
         document.getElementById('sec-' + tab.dataset.section).classList.add('active');
 
         if (tab.dataset.section === 'modalities') loadModalities();
+        if (tab.dataset.section === 'qr') loadQrModalities();
         if (tab.dataset.section === 'jobs') loadJobs();
         if (tab.dataset.section === 'reports') loadReports();
       });
@@ -2083,9 +2146,133 @@
       });
     });
 
-    // Init
+    // -------------------------------------------------------------
+    // Query / Retrieve
+    // -------------------------------------------------------------
+    async function loadQrModalities() {
+      try {
+        const mods = await api('/modalities?expand');
+        const sel = document.getElementById('qrTargetModality');
+        sel.innerHTML = '<option value="">Select Modality...</option>' + 
+          Object.entries(mods)
+            .map(([name, config]) => `<option value="${name}">${name} (${config.AET})</option>`)
+            .join('');
+        document.getElementById('emptyQr').style.display = 'block';
+        document.getElementById('qrBody').innerHTML = '';
+      } catch (e) {
+        toast('Failed to load modalities for Query/Retrieve: ' + e.message, 'error');
+      }
+    }
+
+    async function runQueryRetrieve() {
+      const target = document.getElementById('qrTargetModality').value;
+      if (!target) return toast('Please select a target modality', 'error');
+
+      const qId = document.getElementById('qrPatientId').value.trim() || '*';
+      const qName = document.getElementById('qrPatientName').value.trim() || '*';
+      const qAcc = document.getElementById('qrAccession').value.trim() || '*';
+      const qDate = document.getElementById('qrDate').value.trim() || '';
+      const qModality = document.getElementById('qrModality').value.trim() || '*';
+      const qDesc = document.getElementById('qrStudyDesc').value.trim() || '*';
+
+      const tbody = document.getElementById('qrBody');
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;">Querying...</td></tr>';
+      document.getElementById('emptyQr').style.display = 'none';
+
+      try {
+        const queryDict = {
+          "PatientID": qId,
+          "PatientName": qName,
+          "AccessionNumber": qAcc,
+          "ModalitiesInStudy": qModality,
+          "StudyDescription": qDesc
+        };
+        if (qDate) queryDict["StudyDate"] = qDate;
+
+        const queryPayload = {
+          "Level": "Study",
+          "Query": queryDict
+        };
+
+        const res = await api('/modalities/' + encodeURIComponent(target) + '/query', {
+          method: 'POST',
+          body: JSON.stringify(queryPayload)
+        });
+
+        if (!res || !res.ID) throw new Error('Query failed to start');
+
+        // Fetch answers
+        const answers = await api('/queries/' + res.ID + '/answers?expand');
+        tbody.innerHTML = '';
+
+        if (!answers || Object.keys(answers).length === 0) {
+          document.getElementById('emptyQr').style.display = 'block';
+          return;
+        }
+
+        for (const [ansId, ansDict] of Object.entries(answers)) {
+          let pName = ansDict.PatientName || '';
+          let pId = ansDict.PatientID || '';
+          let sDate = ansDict.StudyDate || '';
+          let sDesc = ansDict.StudyDescription || '';
+          let sMod = ansDict.ModalitiesInStudy || '';
+          let sAcc = ansDict.AccessionNumber || '';
+
+          if (sDate && sDate.length === 8) {
+            sDate = `${sDate.slice(0,4)}/${sDate.slice(4,6)}/${sDate.slice(6,8)}`;
+          }
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>
+              <div style="font-weight:600;font-size:13px;margin-bottom:2px;color:var(--text);">${pName}</div>
+              <div style="font-size:11px;color:var(--text-muted);">${pId}</div>
+            </td>
+            <td>${sDate}</td>
+            <td>${sDesc}</td>
+            <td>${sMod}</td>
+            <td>${sAcc}</td>
+            <td>
+              <button class="btn btn-sm btn-primary" onclick="retrieveStudy('${res.ID}', '${ansId}', this)">Retrieve</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        }
+      } catch (e) {
+        tbody.innerHTML = '';
+        toast('Query failed: ' + e.message, 'error');
+      }
+    }
+
+    async function retrieveStudy(queryId, answerId, btn) {
+      btn.disabled = true;
+      btn.textContent = 'Retrieving...';
+      try {
+        // Fetch local AET to tell remote modality where to send images
+        const system = await api('/system');
+        const localAet = system.DicomAet || 'ORTHANC';
+
+        await api(`/queries/${queryId}/answers/${answerId}/retrieve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: localAet
+        });
+        
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-success');
+        btn.textContent = 'Retrieved';
+        toast('Study retrieved successfully', 'success');
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Retrieve';
+        toast('Retrieve failed: ' + e.message, 'error');
+      }
+    }
+
+    // Initialize
     loadStats();
     loadStudies().then(() => startBackgroundPolling());
+    loadQrModalities();
     setInterval(loadStats, 15000);
   </script>
 </body>
