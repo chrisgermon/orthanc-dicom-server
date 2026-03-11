@@ -1,70 +1,133 @@
 services:
-
-  orthanc:
-    image: orthancteam/orthanc
+  nginx:
+    image: nginx:alpine
+    container_name: crowd-image-proxy
     restart: unless-stopped
     ports:
-      - "${LOCAL_DICOM_PORT:-4242}:4242"
-      - "${LOCAL_HTTP_PORT:-8042}:8042"
+      - "80:80"
+      - "443:443"
     volumes:
-      - "orthanc-storage:/var/lib/orthanc/db:Z"
-      - "./lua:/etc/orthanc/lua:ro"
-      - "./logs:/logs"
-      - "./branding/crowddicom.css:/crowddicom.css:ro"
-      - "./branding/crowddicom-logo.png:/crowddicom-logo.png:ro"
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+      - ./certs:/etc/nginx/certs:ro
+      - ./dashboard:/usr/share/nginx/html/dashboard
+      - ./config/routing-log.json:/usr/share/nginx/html/dashboard/routing-log.json
+    depends_on:
+      - orthanc
+      - ohif
+    networks:
+      - orthanc-net
+
+  ohif:
+    image: ohif/app:v3.12.0
+    container_name: ohif-viewer
+    restart: unless-stopped
     environment:
-      VERBOSE_STARTUP: "true"
-      LOGDIR: "/logs"
-      DISK_THRESHOLD: "${DISK_THRESHOLD:-70}"
-      ORTHANC__DE_IDENTIFY_LOGS: "false"
-      ORTHANC__EXECUTE_LUA_ENABLED: "true"
-      ORTHANC__LUA_HEARTBEAT_PERIOD: 60
-      ORTHANC_JSON: |
-        {
-          "Name": "CrowdDICOM",
-          "DicomAet": "${LOCAL_AET:-STORE_FWD}",
-          "DicomPort": 4242,
-          "RemoteAccessAllowed": true,
-          "AuthenticationEnabled": true,
-          "RegisteredUsers": {
-            "${WEB_USER:-admin}": "${WEB_PASSWORD:-orthanc}"
+      APP_CONFIG: |
+        window.config = {
+          routerBasename: '/',
+          extensions: [],
+          modes: [],
+          whiteLabeling: {
+            createLogoComponentFn: function(React) {
+              return React.createElement('span', {
+                className: 'header-brand',
+              });
+            },
           },
-          "DicomModalities": {
-            "destination": {
-              "AET": "${DEST_AET:-DEST_PACS}",
-              "Port": ${DEST_PORT:-4242},
-              "Host": "${DEST_HOST:-127.0.0.1}"
-            }
+          customizationService: {},
+          showStudyList: true,
+          maxNumberOfWebWorkers: 3,
+          showWarningMessageForCrossOrigin: false,
+          showCPUFallbackMessage: true,
+          showLoadingIndicator: true,
+          strictZSpacingForVolumeViewport: true,
+          groupEnabledModesFirst: true,
+          maxNumRequests: {
+            interaction: 100,
+            thumbnail: 75,
+            prefetch: 25,
           },
-          "LuaScripts": [
-            "/etc/orthanc/lua/store-and-forward.lua"
+          investigationalUseDialog: { option: 'never' },
+          defaultDataSourceName: 'dicomweb',
+          dataSources: [
+            {
+              namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
+              sourceName: 'dicomweb',
+              configuration: {
+                friendlyName: 'Orthanc DICOM Server',
+                name: 'orthanc',
+                wadoUriRoot: '/wado',
+                qidoRoot: '/dicom-web',
+                wadoRoot: '/dicom-web',
+                qidoSupportsIncludeField: false,
+                imageRendering: 'wadors',
+                thumbnailRendering: 'wadors',
+                enableStudyLazyLoad: true,
+                supportsFuzzyMatching: false,
+                supportsWildcard: true,
+                staticWado: true,
+                singlepart: 'bulkdata,video',
+                acceptHeader: ['multipart/related; type=application/octet-stream; transfer-syntax=*'],
+                bulkDataURI: { enabled: true, relativeResolution: 'studies' },
+                omitQuotationForMultipartRequest: true,
+              },
+            },
           ],
-          "OrthancExplorer2": {
-            "IsDefaultOrthancUI": true,
-            "Theme": "dark",
-            "CustomLogoPath": "/crowddicom-logo.png",
-            "CustomCssPath": "/crowddicom.css",
-            "UiOptions": {
-              "EnableLinkToLegacyUi": false
-            }
-          },
-          "DicomAlwaysAllowStore": true,
-          "UnknownSopClassAccepted": true,
-          "StableAge": 5,
-          "SaveJobs": true,
-          "OverwriteInstances": true,
-          "JobsHistorySize": 500,
-          "ConcurrentJobs": 2,
-          "StorageCompression": false,
-          "MaximumStorageSize": 0,
-          "DicomCheckCalledAet": false
-        }
+        };
+    networks:
+      - orthanc-net
+
+  orthanc:
+    image: orthancteam/orthanc:26.1.0
+    container_name: orthanc
+    restart: unless-stopped
+    ports:
+      - "11112:11112" # DICOM port (receive from modalities)
+    volumes:
+      - ./config/orthanc.json:/etc/orthanc/orthanc.json
+      - ./config/autoforward.lua:/etc/orthanc/autoforward.lua:ro
+      - ./config/routing-rules.json:/var/lib/orthanc/routing-rules.json
+      - ./config/routing-log.json:/var/lib/orthanc/routing-log.json
+      - ./config/storage-settings.json:/var/lib/orthanc/storage-settings.json
+      - ./config/pending-network-config.json:/var/lib/orthanc/pending-network-config.json
+      - ./config/network-status.json:/var/lib/orthanc/network-status.json
+      - ./config/server-aetitles.json:/var/lib/orthanc/server-aetitles.json
+      - orthanc-storage:/var/lib/orthanc/db
+    environment:
+      - ORTHANC__POSTGRESQL__HOST=postgres
+      - VERBOSE_ENABLED=true
+      - TZ=Australia/Brisbane
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - orthanc-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: orthanc-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: orthanc
+      POSTGRES_USER: orthanc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orthanc-secure-change-me}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "curl -sf http://localhost:8042/system || exit 1" ]
-      start_period: 15s
-      interval: 30s
+      test: ["CMD-SHELL", "pg_isready -U orthanc"]
+      interval: 5s
       timeout: 5s
-      retries: 3
+      retries: 5
+    networks:
+      - orthanc-net
 
 volumes:
   orthanc-storage:
+    driver: local
+  postgres-data:
+    driver: local
+
+networks:
+  orthanc-net:
+    driver: bridge

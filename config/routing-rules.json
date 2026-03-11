@@ -1,0 +1,1 @@
+[{"name":"All to PACS","enabled":true,"type":"push","destination":"PACS","source":"","pollIntervalMinutes":5,"sendLevel":"study","filterModality":"","filterStudyDescription":"","filterSeriesDescription":"","filterCallingAet":"!AURVCMOD3","filterCalledAet":"","filterDateRange":"","deleteAfterSend":false}]

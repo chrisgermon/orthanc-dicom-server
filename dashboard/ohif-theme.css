@@ -1,0 +1,96 @@
+/* Crowd Image Management - OHIF Theme Override */
+/* Brand colors: Purple #5b2d8e → Blue #0077cc → Cyan #00a3e0 */
+
+:root {
+  /* Background - noticeably lighter blue-grey */
+  --background: 225 20% 18% !important;
+  --foreground: 0 0% 96% !important;
+
+  /* Cards / panels - lighter surfaces */
+  --card: 225 18% 24% !important;
+  --card-foreground: 0 0% 96% !important;
+
+  /* Primary - brand blue */
+  --primary: 204 100% 40% !important;
+  --primary-foreground: 0 0% 100% !important;
+
+  /* Secondary - brand purple */
+  --secondary: 270 51% 37% !important;
+  --secondary-foreground: 220 20% 90% !important;
+
+  /* Accent - brand blue */
+  --accent: 204 70% 32% !important;
+  --accent-foreground: 0 0% 98% !important;
+
+  /* Muted - clearly lighter */
+  --muted: 225 16% 28% !important;
+  --muted-foreground: 210 25% 68% !important;
+
+  /* Popover / dropdowns */
+  --popover: 225 18% 22% !important;
+  --popover-foreground: 0 0% 96% !important;
+
+  /* Borders - more visible */
+  --border: 225 12% 32% !important;
+
+  /* Inputs */
+  --input: 225 16% 32% !important;
+
+  /* Ring / focus - brand cyan */
+  --ring: 197 100% 44% !important;
+
+  /* Highlight - brand cyan */
+  --highlight: 197 100% 50% !important;
+
+  /* Neutrals */
+  --neutral: 220 12% 58% !important;
+  --neutral-light: 215 30% 75% !important;
+  --neutral-dark: 225 15% 30% !important;
+
+  /* Destructive */
+  --destructive: 0 72% 51% !important;
+  --destructive-foreground: 0 0% 98% !important;
+}
+
+/* Override any hardcoded black backgrounds */
+[class*="bg-black"],
+[style*="background: rgb(0, 0, 0)"],
+[style*="background-color: rgb(0, 0, 0)"],
+[style*="background:#000"],
+[style*="background: #000"] {
+  background: hsl(225, 20%, 18%) !important;
+}
+
+/* Toolbar / header area */
+.bg-primary-dark,
+[class*="bg-primary-dark"] {
+  background: hsl(225, 20%, 20%) !important;
+}
+
+/* Side panels */
+.bg-secondary-dark,
+[class*="bg-secondary-dark"],
+[class*="bg-popover"] {
+  background: hsl(225, 18%, 22%) !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(225, 20%, 18%);
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(225, 12%, 35%);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(204, 50%, 40%);
+}
+
+/* Text selection - brand blue */
+::selection {
+  background: hsla(204, 100%, 40%, 0.4);
+}
