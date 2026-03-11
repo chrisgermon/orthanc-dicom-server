@@ -37,6 +37,7 @@
   "HttpTimeout": 60,
   "JobsHistorySize": 100,
   "KeepAlive": true,
+  "LuaHeartBeatPeriod": 60,
   "LuaScripts": ["/etc/orthanc/autoforward.lua"],
   "MaximumPatientCount": 0,
   "MaximumStorageCacheSize": 128,

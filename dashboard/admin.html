@@ -241,13 +241,14 @@
         </div>
       </div>
       <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
-        When a study becomes stable (fully received), it is checked against these rules. Matching studies are automatically forwarded to the destination modality.
+        <strong>Push rules:</strong> Triggered when a study arrives and becomes stable on this server. <strong>Poll rules:</strong> Periodically query an upstream PACS for matching studies/series and route them to a destination.
       </p>
+      <div id="pollStatusArea" style="margin-bottom:16px;"></div>
       <div id="routingRulesList"></div>
       <div id="emptyRouting" style="display:none;text-align:center;padding:48px;color:var(--text-muted);">
         <div style="font-size:48px;margin-bottom:12px;opacity:0.5;">&#128268;</div>
         <h3 style="font-size:16px;color:var(--text);margin-bottom:4px;">No routing rules configured</h3>
-        <p style="font-size:13px;">Click "Add Rule" to auto-forward incoming studies to another modality.</p>
+        <p style="font-size:13px;">Click "Add Rule" to create push or poll auto-routing rules.</p>
       </div>
 
       <!-- Routing Log -->
@@ -262,15 +263,16 @@
               <tr style="border-bottom:2px solid var(--border);text-align:left;">
                 <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;white-space:nowrap;">Time</th>
                 <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;">Rule</th>
+                <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;">Type</th>
+                <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;">Level</th>
                 <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;">Destination</th>
                 <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;">Status</th>
-                <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;white-space:nowrap;">Calling AET</th>
-                <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;white-space:nowrap;">Called AET</th>
                 <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;">Description</th>
+                <th style="padding:8px 10px;color:var(--text-muted);font-weight:600;">Series</th>
               </tr>
             </thead>
             <tbody id="routingLogBody">
-              <tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text-muted);">Loading...</td></tr>
+              <tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text-muted);">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -439,31 +441,109 @@
 
   <!-- Routing Rule Modal -->
   <div class="modal-overlay" id="ruleModal">
-    <div class="modal">
+    <div class="modal" style="max-width:620px;">
       <div class="modal-title" id="ruleModalTitle">Add Routing Rule</div>
       <input type="hidden" id="ruleEditIndex" value="-1">
-      <div class="form-group"><label>Rule Name</label><input type="text" id="ruleName" placeholder="e.g. Forward CT to PACS"></div>
+
+      <div class="form-group"><label>Rule Name</label><input type="text" id="ruleName" placeholder="e.g. Route CT Chest series to Research PACS"></div>
+
+      <!-- Rule Type -->
+      <div class="form-group">
+        <label>Rule Type</label>
+        <div style="display:flex;gap:12px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;">
+            <input type="radio" name="ruleType" value="push" checked onchange="toggleRuleType(this.value)"> Push <span style="font-size:11px;color:var(--text-dim);">(on study arrival)</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;">
+            <input type="radio" name="ruleType" value="poll" onchange="toggleRuleType(this.value)"> Poll <span style="font-size:11px;color:var(--text-dim);">(query PACS periodically)</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Poll-specific fields -->
+      <div id="pollFields" style="display:none;">
+        <div class="form-group">
+          <label>Source PACS (query from)</label>
+          <select id="ruleSource"></select>
+        </div>
+        <div class="form-group">
+          <label>Poll Interval (minutes)</label>
+          <input type="number" id="rulePollInterval" value="5" min="1" max="1440" placeholder="5">
+        </div>
+      </div>
+
       <div class="form-group">
         <label>Destination Modality</label>
         <select id="ruleDestination"></select>
       </div>
+
+      <!-- Send Level -->
       <div class="form-group">
-        <label>Filter: Modality Type (optional)</label>
+        <label>Send Level</label>
+        <div style="display:flex;gap:12px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;">
+            <input type="radio" name="ruleSendLevel" value="study" checked> Whole Study
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;">
+            <input type="radio" name="ruleSendLevel" value="series"> Series Only
+          </label>
+        </div>
+        <p style="font-size:11px;color:var(--text-dim);margin-top:4px;">Series level sends only matching series, not the entire study.</p>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text-muted);">FILTERS</div>
+      </div>
+
+      <div class="form-group">
+        <label>Modality Type</label>
         <input type="text" id="ruleFilterModality" placeholder="e.g. CT, MR, CR, * for any">
       </div>
       <div class="form-group">
-        <label>Filter: Study Description (optional)</label>
-        <input type="text" id="ruleFilterDescription" placeholder="e.g. *chest*, *spine*">
+        <label>Study Description</label>
+        <input type="text" id="ruleFilterStudyDescription" placeholder="e.g. *chest*, *spine*">
       </div>
       <div class="form-group">
-        <label>Filter: Calling AE Title (optional)</label>
-        <input type="text" id="ruleFilterCallingAet" placeholder="e.g. CT_SCANNER_1">
+        <label>Series Description</label>
+        <input type="text" id="ruleFilterSeriesDescription" placeholder="e.g. *lung window*, *axial*">
+        <p style="font-size:11px;color:var(--text-dim);margin-top:4px;">Most useful with Series send level. Use * as wildcard, ! prefix to negate.</p>
       </div>
       <div class="form-group">
-        <label>Filter: Called AE Title</label>
-        <select id="ruleFilterCalledAet"></select>
+        <label>Date Range</label>
+        <select id="ruleFilterDateRange">
+          <option value="">Any date</option>
+          <option value="today">Today only</option>
+          <option value="yesterday">Since yesterday</option>
+          <option value="7days">Last 7 days</option>
+          <option value="30days">Last 30 days</option>
+          <option value="90days">Last 90 days</option>
+        </select>
       </div>
-      <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Leave filters blank to match all studies. Use * as wildcard. Called AET filters by which server AE Title was used to send the study.</p>
+
+      <!-- Push-specific filters -->
+      <div id="pushFilters">
+        <div class="form-group">
+          <label>Calling AE Title</label>
+          <input type="text" id="ruleFilterCallingAet" placeholder="e.g. CT_SCANNER_1">
+        </div>
+        <div class="form-group">
+          <label>Called AE Title</label>
+          <select id="ruleFilterCalledAet"></select>
+        </div>
+      </div>
+
+      <!-- Options -->
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text-muted);">OPTIONS</div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;letter-spacing:0;">
+          <input type="checkbox" id="ruleDeleteAfterSend" style="accent-color:var(--danger);">
+          <span style="font-size:14px;">Delete from local server after successful send</span>
+        </label>
+      </div>
+
+      <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Leave filters blank to match all. Use * as wildcard. Prefix with ! to negate (e.g. !AURVCMOD3 excludes that AET).</p>
       <div class="modal-actions">
         <button class="btn" onclick="closeRuleModal()">Cancel</button>
         <button class="btn btn-primary" onclick="saveRule()">Save</button>
@@ -890,20 +970,39 @@ print("OK")`;
 
       empty.style.display = 'none';
       list.innerHTML = routingRules.map((rule, i) => {
+        const ruleType = rule.type || 'push';
+        const sendLevel = rule.sendLevel || 'study';
         const filters = [];
         if (rule.filterModality) filters.push('Modality: ' + rule.filterModality);
-        if (rule.filterDescription) filters.push('Desc: ' + rule.filterDescription);
+        const descFilter = rule.filterStudyDescription || rule.filterDescription || '';
+        if (descFilter) filters.push('Study: ' + descFilter);
+        if (rule.filterSeriesDescription) filters.push('Series: ' + rule.filterSeriesDescription);
+        if (rule.filterDateRange) filters.push('Date: ' + rule.filterDateRange);
         if (rule.filterCallingAet) filters.push('Calling AET: ' + rule.filterCallingAet);
         if (rule.filterCalledAet) filters.push('Called AET: ' + rule.filterCalledAet);
         const filterText = filters.length > 0 ? filters.join(' | ') : 'All studies';
 
+        const typeBadgeColor = ruleType === 'poll' ? 'background:rgba(0,163,224,0.15);color:var(--blue-light);' : 'background:rgba(91,45,142,0.15);color:#b794f4;';
+        const typeBadge = `<span class="rule-badge" style="${typeBadgeColor}">${ruleType === 'poll' ? '⟳ Poll' : '⚡ Push'}</span>`;
+        const levelBadge = sendLevel === 'series' ? '<span class="rule-badge" style="background:rgba(251,191,36,0.15);color:var(--warning);">Series</span>' : '<span class="rule-badge" style="background:rgba(139,143,163,0.1);color:var(--text-muted);">Study</span>';
+
+        let pollInfo = '';
+        if (ruleType === 'poll') {
+          pollInfo = ` | Source: <strong>${esc(rule.source || '?')}</strong> | Every ${rule.pollIntervalMinutes || 5} min`;
+        }
+
+        const runNowBtn = ruleType === 'poll' && rule.enabled ? `<button class="btn btn-sm btn-success" onclick="runPollRuleNow('${esc(rule.name || '')}')" title="Run this poll rule immediately">Run Now</button>` : '';
+
         return `<div class="rule-card ${rule.enabled ? '' : 'disabled'}">
           <div class="rule-header">
-            <div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
               <span class="rule-name">${esc(rule.name || 'Unnamed Rule')}</span>
+              ${typeBadge}
+              ${levelBadge}
               <span class="rule-badge ${rule.enabled ? 'active' : 'inactive'}">${rule.enabled ? 'Active' : 'Inactive'}</span>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
+              ${runNowBtn}
               <label class="toggle">
                 <input type="checkbox" ${rule.enabled ? 'checked' : ''} onchange="toggleRule(${i}, this.checked)">
                 <span class="slider"></span>
@@ -912,18 +1011,75 @@ print("OK")`;
               <button class="btn btn-sm btn-danger" onclick="deleteRule(${i})">Delete</button>
             </div>
           </div>
-          <div class="rule-detail">Destination: <strong>${esc(rule.destination || '-')}</strong> | Filters: ${esc(filterText)}</div>
+          <div class="rule-detail">Destination: <strong>${esc(rule.destination || '-')}</strong>${pollInfo} | Filters: ${esc(filterText)}${rule.deleteAfterSend ? ' | <span style="color:var(--danger);">Delete after send</span>' : ''}</div>
         </div>`;
       }).join('');
+
+      // Load poll status for poll rules
+      loadPollStatus();
+    }
+
+    async function loadPollStatus() {
+      const hasPoll = routingRules.some(r => (r.type || 'push') === 'poll');
+      const area = document.getElementById('pollStatusArea');
+      if (!hasPoll) { area.innerHTML = ''; return; }
+      try {
+        const result = await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: 'GetPollStatus()'
+        });
+        const statuses = JSON.parse(result.trim() || '[]');
+        if (statuses.length === 0) { area.innerHTML = ''; return; }
+        area.innerHTML = '<div class="card" style="padding:12px 16px;"><div class="card-title" style="margin-bottom:8px;">Poll Status</div>' +
+          statuses.map(s => {
+            const lastRun = s.lastRun ? new Date(s.lastRun).toLocaleString() : 'Never';
+            const nextRun = s.nextRunSecs > 0 ? Math.ceil(s.nextRunSecs / 60) + ' min' : 'Now';
+            return `<div style="font-size:13px;padding:4px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px;">
+              <span><strong>${esc(s.name)}</strong></span>
+              <span style="color:var(--text-muted);">Last: ${esc(lastRun)} | Next: ${esc(nextRun)} | Interval: ${s.intervalMinutes}m</span>
+            </div>`;
+          }).join('') + '</div>';
+      } catch (e) { area.innerHTML = ''; }
+    }
+
+    async function runPollRuleNow(ruleName) {
+      if (!confirm(`Run poll rule "${ruleName}" now?\n\nThis will query the source PACS and route matching studies/series.`)) return;
+      toast(`Running poll rule "${ruleName}"...`, 'info');
+      try {
+        const luaScript = `RunPollRuleByName([==[${ruleName}]==])`;
+        const result = await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript
+        });
+        if (result.trim().startsWith('ERROR')) {
+          toast('Poll rule error: ' + result.trim(), 'error');
+        } else {
+          toast('Poll rule completed', 'success');
+        }
+        loadRoutingLog();
+        loadPollStatus();
+      } catch (e) {
+        toast('Failed to run poll rule: ' + e.message, 'error');
+      }
+    }
+
+    function toggleRuleType(type) {
+      document.getElementById('pollFields').style.display = type === 'poll' ? 'block' : 'none';
+      document.getElementById('pushFilters').style.display = type === 'push' ? 'block' : 'none';
     }
 
     async function populateRuleDestinations() {
       try {
         const mods = await api('/modalities?expand');
         const sel = document.getElementById('ruleDestination');
-        sel.innerHTML = Object.entries(mods).map(([name, config]) =>
+        const srcSel = document.getElementById('ruleSource');
+        const options = Object.entries(mods).map(([name, config]) =>
           `<option value="${esc(name)}">${esc(name)} (${esc(config.AET || config[0])} @ ${esc(config.Host || config[1])}:${config.Port || config[2]})</option>`
         ).join('');
+        sel.innerHTML = options;
+        srcSel.innerHTML = options;
       } catch (e) { toast('Failed to load modalities for routing', 'error'); }
     }
 
@@ -931,12 +1087,10 @@ print("OK")`;
       const sel = document.getElementById('ruleFilterCalledAet');
       sel.innerHTML = '<option value="">Any (match all)</option>';
       try {
-        // Get primary AET from /system
         const system = await api('/system');
         const primaryAet = system.DicomAet || 'ORTHANC';
         sel.innerHTML += `<option value="${esc(primaryAet)}">${esc(primaryAet)} (Primary)</option>`;
 
-        // Get additional AETs from server-aetitles.json
         const luaScript = `
 local f = io.open("/var/lib/orthanc/server-aetitles.json", "r")
 if not f then print("[]") return end
@@ -954,7 +1108,7 @@ print(c)`;
             sel.innerHTML += `<option value="${esc(aet)}">${esc(aet)}</option>`;
           });
         }
-      } catch (e) { /* silently fail, Any is still available */ }
+      } catch (e) { /* silently fail */ }
       if (selectedValue) sel.value = selectedValue;
     }
 
@@ -966,18 +1120,39 @@ print(c)`;
       if (isEdit) {
         const rule = routingRules[editIndex];
         document.getElementById('ruleName').value = rule.name || '';
+        // Rule type
+        const ruleType = rule.type || 'push';
+        document.querySelector(`input[name="ruleType"][value="${ruleType}"]`).checked = true;
+        toggleRuleType(ruleType);
+        // Send level
+        const sendLevel = rule.sendLevel || 'study';
+        document.querySelector(`input[name="ruleSendLevel"][value="${sendLevel}"]`).checked = true;
+        // Poll fields
+        document.getElementById('rulePollInterval').value = rule.pollIntervalMinutes || 5;
+        // Filters
         document.getElementById('ruleFilterModality').value = rule.filterModality || '';
-        document.getElementById('ruleFilterDescription').value = rule.filterDescription || '';
+        document.getElementById('ruleFilterStudyDescription').value = rule.filterStudyDescription || rule.filterDescription || '';
+        document.getElementById('ruleFilterSeriesDescription').value = rule.filterSeriesDescription || '';
+        document.getElementById('ruleFilterDateRange').value = rule.filterDateRange || '';
         document.getElementById('ruleFilterCallingAet').value = rule.filterCallingAet || '';
+        document.getElementById('ruleDeleteAfterSend').checked = !!rule.deleteAfterSend;
         populateRuleDestinations().then(() => {
           document.getElementById('ruleDestination').value = rule.destination || '';
+          document.getElementById('ruleSource').value = rule.source || '';
         });
         populateCalledAetOptions(rule.filterCalledAet || '');
       } else {
         document.getElementById('ruleName').value = '';
+        document.querySelector('input[name="ruleType"][value="push"]').checked = true;
+        toggleRuleType('push');
+        document.querySelector('input[name="ruleSendLevel"][value="study"]').checked = true;
+        document.getElementById('rulePollInterval').value = 5;
         document.getElementById('ruleFilterModality').value = '';
-        document.getElementById('ruleFilterDescription').value = '';
+        document.getElementById('ruleFilterStudyDescription').value = '';
+        document.getElementById('ruleFilterSeriesDescription').value = '';
+        document.getElementById('ruleFilterDateRange').value = '';
         document.getElementById('ruleFilterCallingAet').value = '';
+        document.getElementById('ruleDeleteAfterSend').checked = false;
         populateRuleDestinations();
         populateCalledAetOptions('');
       }
@@ -990,18 +1165,32 @@ print(c)`;
 
     async function saveRule() {
       const editIndex = parseInt(document.getElementById('ruleEditIndex').value);
+      const ruleType = document.querySelector('input[name="ruleType"]:checked').value;
+      const sendLevel = document.querySelector('input[name="ruleSendLevel"]:checked').value;
+
       const rule = {
         name: document.getElementById('ruleName').value.trim(),
         enabled: true,
+        type: ruleType,
         destination: document.getElementById('ruleDestination').value,
+        source: ruleType === 'poll' ? document.getElementById('ruleSource').value : '',
+        pollIntervalMinutes: ruleType === 'poll' ? parseInt(document.getElementById('rulePollInterval').value) || 5 : 0,
+        sendLevel: sendLevel,
         filterModality: document.getElementById('ruleFilterModality').value.trim(),
-        filterDescription: document.getElementById('ruleFilterDescription').value.trim(),
-        filterCallingAet: document.getElementById('ruleFilterCallingAet').value.trim(),
-        filterCalledAet: document.getElementById('ruleFilterCalledAet').value
+        filterStudyDescription: document.getElementById('ruleFilterStudyDescription').value.trim(),
+        filterSeriesDescription: document.getElementById('ruleFilterSeriesDescription').value.trim(),
+        filterDateRange: document.getElementById('ruleFilterDateRange').value,
+        filterCallingAet: ruleType === 'push' ? document.getElementById('ruleFilterCallingAet').value.trim() : '',
+        filterCalledAet: ruleType === 'push' ? document.getElementById('ruleFilterCalledAet').value : '',
+        deleteAfterSend: document.getElementById('ruleDeleteAfterSend').checked
       };
 
       if (!rule.name || !rule.destination) {
         toast('Please provide a name and destination', 'error');
+        return;
+      }
+      if (ruleType === 'poll' && !rule.source) {
+        toast('Poll rules require a source PACS', 'error');
         return;
       }
 
@@ -1033,10 +1222,10 @@ print(c)`;
     async function pushRoutingRules() {
       try {
         const rulesJson = JSON.stringify(routingRules);
-        // Update Lua global and save to file
         const luaScript = `
 ROUTING_RULES = ParseJson([==[${rulesJson}]==])
 SaveRoutingRules()
+RebuildPollSentCache()
 print("OK: " .. #ROUTING_RULES .. " rules active")`;
         const result = await apiText('/tools/execute-script', {
           method: 'POST',
@@ -1068,7 +1257,7 @@ print("OK: " .. #ROUTING_RULES .. " rules active")`;
     function renderRoutingLog(entries) {
       const body = document.getElementById('routingLogBody');
       if (!entries || entries.length === 0) {
-        body.innerHTML = '<tr><td colspan="7" style="padding:24px;text-align:center;color:var(--text-muted);">No routing events logged yet.</td></tr>';
+        body.innerHTML = '<tr><td colspan="8" style="padding:24px;text-align:center;color:var(--text-muted);">No routing events logged yet.</td></tr>';
         return;
       }
       // Newest first, cap at 100
@@ -1079,14 +1268,19 @@ print("OK: " .. #ROUTING_RULES .. " rules active")`;
         const statusLabel = status === 'sent' ? 'Sent' : status === 'failed' ? 'Failed' : status;
         const time = e.time ? new Date(e.time).toLocaleString() : '-';
         const errorTip = e.error ? ' title="' + esc(e.error) + '"' : '';
+        const ruleType = e.ruleType || 'push';
+        const sendLevel = e.sendLevel || 'study';
+        const typeBadgeColor = ruleType === 'poll' ? 'background:rgba(0,163,224,0.15);color:var(--blue-light);' : 'background:rgba(91,45,142,0.15);color:#b794f4;';
+        const levelBadgeColor = sendLevel === 'series' ? 'background:rgba(251,191,36,0.15);color:var(--warning);' : 'background:rgba(139,143,163,0.1);color:var(--text-muted);';
         return `<tr style="border-bottom:1px solid var(--border);">
           <td style="padding:6px 10px;white-space:nowrap;color:var(--text-muted);">${esc(time)}</td>
           <td style="padding:6px 10px;">${esc(e.rule || '-')}</td>
+          <td style="padding:6px 10px;"><span class="rule-badge" style="${typeBadgeColor}">${ruleType}</span></td>
+          <td style="padding:6px 10px;"><span class="rule-badge" style="${levelBadgeColor}">${sendLevel}</span></td>
           <td style="padding:6px 10px;">${esc(e.dest || '-')}</td>
           <td style="padding:6px 10px;"><span${errorTip} style="color:${statusColor};font-weight:600;">${esc(statusLabel)}</span></td>
-          <td style="padding:6px 10px;">${esc(e.callingAet || '-')}</td>
-          <td style="padding:6px 10px;">${esc(e.calledAet || '-')}</td>
           <td style="padding:6px 10px;">${esc(e.description || '-')}</td>
+          <td style="padding:6px 10px;">${esc(e.seriesDesc || '-')}</td>
         </tr>`;
       }).join('');
     }
