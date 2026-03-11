@@ -57,7 +57,7 @@ if [ -n "${NICS}" ]; then
   echo ""
   warn "This will set ALL interfaces to DHCP and may change the server's IP address."
   warn "If you are connected via SSH on a static IP, you may lose connection."
-  read -p "  Set all NICs to DHCP? (y/N) " -r
+  read -p "  Set all NICs to DHCP? (y/N) " -r < /dev/tty
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     # Back up existing netplan configs
     mkdir -p "${NETPLAN_DIR}/backup"
@@ -130,7 +130,7 @@ fi
 # ── 4. Create install directory ──
 if [ -d "${INSTALL_DIR}" ]; then
   warn "Install directory ${INSTALL_DIR} already exists."
-  read -p "Overwrite config files? Volumes will be preserved. (y/N) " -r
+  read -p "Overwrite config files? Volumes will be preserved. (y/N) " -r < /dev/tty
   if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     err "Aborted."
     exit 1
@@ -195,17 +195,17 @@ fi
 # ── 7. Set admin credentials ──
 echo ""
 info "Setting admin credentials for the web interface..."
-read -p "  Admin username [admin]: " ADMIN_USER
+read -p "  Admin username [admin]: " ADMIN_USER < /dev/tty
 ADMIN_USER="${ADMIN_USER:-admin}"
 
 while true; do
-  read -s -p "  Admin password: " ADMIN_PASS
+  read -s -p "  Admin password: " ADMIN_PASS < /dev/tty
   echo ""
   if [ -z "${ADMIN_PASS}" ]; then
     warn "Password cannot be empty."
     continue
   fi
-  read -s -p "  Confirm password: " ADMIN_PASS2
+  read -s -p "  Confirm password: " ADMIN_PASS2 < /dev/tty
   echo ""
   if [ "${ADMIN_PASS}" != "${ADMIN_PASS2}" ]; then
     warn "Passwords do not match. Try again."
