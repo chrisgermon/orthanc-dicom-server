@@ -226,7 +226,25 @@ POSTGRES_PASSWORD=${PG_PASS}
 EOF
 
 # Also update orthanc.json to match
-sed -i "s/\"Password\": \"orthanc-secure-change-me\"/\"Password\": \"${PG_PASS}\"/" "${INSTALL_DIR}/config/orthanc.json"
+if command -v python3 &> /dev/null; then
+  python3 - "${PG_PASS}" << 'PYEOF'
+import sys, json
+cfg_path = "/opt/crowd-image/config/orthanc.json"
+pg_pass = sys.argv[1]
+try:
+    with open(cfg_path, "r") as f:
+        c = json.load(f)
+    if "PostgreSQL" in c:
+        c["PostgreSQL"]["Password"] = pg_pass
+        with open(cfg_path, "w") as f:
+            json.dump(c, f, indent=2)
+except Exception as e:
+    print(f"Warning: could not update orthanc.json password: {e}")
+PYEOF
+else
+  # Fallback to sed if no python3
+  sed -i "s/\"Password\": \".*\"/\"Password\": \"${PG_PASS}\"/" "${INSTALL_DIR}/config/orthanc.json"
+fi
 ok "PostgreSQL password generated and configured."
 
 # ── 8b. Configure external ports ──

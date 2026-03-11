@@ -51,7 +51,7 @@
     "EnableStorage": false,
     "Host": "postgres",
     "Lock": false,
-    "Password": "7IV6OCop3S3VbtIWPeaMcT9jV5efB7UY",
+    "Password": "orthanc-secure-change-me",
     "Port": 5432,
     "Username": "orthanc"
   },
