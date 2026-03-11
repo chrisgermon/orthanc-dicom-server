@@ -229,6 +229,40 @@ EOF
 sed -i "s/\"Password\": \"orthanc-secure-change-me\"/\"Password\": \"${PG_PASS}\"/" "${INSTALL_DIR}/config/orthanc.json"
 ok "PostgreSQL password generated and configured."
 
+# ── 8b. Configure external ports ──
+echo ""
+read -p "  HTTP port to use (leave blank for 80): " HTTP_PORT < /dev/tty
+HTTP_PORT="${HTTP_PORT:-80}"
+read -p "  HTTPS port to use (leave blank for 443): " HTTPS_PORT < /dev/tty
+HTTPS_PORT="${HTTPS_PORT:-443}"
+
+if [ "$HTTP_PORT" != "80" ] || [ "$HTTPS_PORT" != "443" ]; then
+  # Use Python to safely modify the yaml mapping for ports
+  if command -v python3 &> /dev/null; then
+    python3 - "$HTTP_PORT" "$HTTPS_PORT" << 'PYEOF'
+import sys, json
+cfg_path = "/opt/crowd-image/docker-compose.yml"
+port_http = sys.argv[1]
+port_https = sys.argv[2]
+try:
+    # Safely modify the file with simple string replacement to avoid losing docker-compose formatting if yaml is unavailable
+    with open(cfg_path, "r") as f:
+        content = f.read()
+    
+    content = content.replace("      - \"80:80\"", f"      - \"{port_http}:80\"")
+    content = content.replace("      - \"443:443\"", f"      - \"{port_https}:443\"")
+        
+    with open(cfg_path, "w") as f:
+        f.write(content)
+except Exception as e:
+    print(f"Warning: could not update docker-compose.yml ports: {e}")
+PYEOF
+    ok "Custom ports configured (HTTP: ${HTTP_PORT}, HTTPS: ${HTTPS_PORT})."
+  else
+    warn "python3 not found, skipping port override."
+  fi
+fi
+
 # ── 9. Ensure writable config files exist ──
 info "Ensuring config files are writable..."
 touch "${INSTALL_DIR}/config/routing-rules.json"
