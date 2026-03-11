@@ -1,0 +1,3 @@
+@echo off
+echo Launching configuration wizard ...
+powershell -ExecutionPolicy Bypass -File "%~dp0Scripts\Configure.ps1"

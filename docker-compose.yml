@@ -1,0 +1,70 @@
+services:
+
+  orthanc:
+    image: orthancteam/orthanc
+    restart: unless-stopped
+    ports:
+      - "${LOCAL_DICOM_PORT:-4242}:4242"
+      - "${LOCAL_HTTP_PORT:-8042}:8042"
+    volumes:
+      - "orthanc-storage:/var/lib/orthanc/db:Z"
+      - "./lua:/etc/orthanc/lua:ro"
+      - "./logs:/logs"
+      - "./branding/crowddicom.css:/crowddicom.css:ro"
+      - "./branding/crowddicom-logo.png:/crowddicom-logo.png:ro"
+    environment:
+      VERBOSE_STARTUP: "true"
+      LOGDIR: "/logs"
+      DISK_THRESHOLD: "${DISK_THRESHOLD:-70}"
+      ORTHANC__DE_IDENTIFY_LOGS: "false"
+      ORTHANC__EXECUTE_LUA_ENABLED: "true"
+      ORTHANC__LUA_HEARTBEAT_PERIOD: 60
+      ORTHANC_JSON: |
+        {
+          "Name": "CrowdDICOM",
+          "DicomAet": "${LOCAL_AET:-STORE_FWD}",
+          "DicomPort": 4242,
+          "RemoteAccessAllowed": true,
+          "AuthenticationEnabled": true,
+          "RegisteredUsers": {
+            "${WEB_USER:-admin}": "${WEB_PASSWORD:-orthanc}"
+          },
+          "DicomModalities": {
+            "destination": {
+              "AET": "${DEST_AET:-DEST_PACS}",
+              "Port": ${DEST_PORT:-4242},
+              "Host": "${DEST_HOST:-127.0.0.1}"
+            }
+          },
+          "LuaScripts": [
+            "/etc/orthanc/lua/store-and-forward.lua"
+          ],
+          "OrthancExplorer2": {
+            "IsDefaultOrthancUI": true,
+            "Theme": "dark",
+            "CustomLogoPath": "/crowddicom-logo.png",
+            "CustomCssPath": "/crowddicom.css",
+            "UiOptions": {
+              "EnableLinkToLegacyUi": false
+            }
+          },
+          "DicomAlwaysAllowStore": true,
+          "UnknownSopClassAccepted": true,
+          "StableAge": 5,
+          "SaveJobs": true,
+          "OverwriteInstances": true,
+          "JobsHistorySize": 500,
+          "ConcurrentJobs": 2,
+          "StorageCompression": false,
+          "MaximumStorageSize": 0,
+          "DicomCheckCalledAet": false
+        }
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -sf http://localhost:8042/system || exit 1" ]
+      start_period: 15s
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  orthanc-storage:

@@ -1,0 +1,150 @@
+/* ═══════════════════════════════════════════════════════════
+   CrowdDICOM — Custom Theme for Orthanc Explorer 2
+   Color palette extracted from the CrowdDICOM brand logo
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+    /* ── CrowdDICOM Brand Colors ─────────────────────────── */
+    --cd-purple:       #5B3D8F;
+    --cd-purple-dark:  #3E2866;
+    --cd-purple-light: #7B5BAF;
+    --cd-blue:         #2B7CE5;
+    --cd-blue-light:   #5B9DEF;
+    --cd-teal:         #2CC5A0;
+    --cd-teal-light:   #4DE0BE;
+    --cd-light-blue:   #87CEEB;
+    --cd-bg-dark:      #120E1E;
+    --cd-surface:      #1E1832;
+    --cd-surface-2:    #2A2244;
+    --cd-text:         #E8E6F0;
+    --cd-text-dim:     #A09BB4;
+
+    /* ── Orthanc Explorer 2 CSS Variables ─────────────────── */
+
+    /* Navigation sidebar */
+    --nav-side-bg-color: var(--cd-purple-dark);
+
+    /* Study list */
+    --study-table-filter-bg-color: var(--cd-purple);
+    --study-hover-color: rgba(91, 61, 143, 0.35);
+    --series-hover-color: rgba(43, 124, 229, 0.3);
+    --instance-hover-color: rgba(44, 197, 160, 0.3);
+
+    /* Labels */
+    --label-bg-color: var(--cd-teal);
+}
+
+/* ── Bootstrap button overrides ──────────────────────────────── */
+
+.btn-primary {
+    --bs-btn-bg: var(--cd-purple);
+    --bs-btn-border-color: var(--cd-purple);
+    --bs-btn-hover-bg: var(--cd-purple-light);
+    --bs-btn-hover-border-color: var(--cd-purple-light);
+    --bs-btn-active-bg: var(--cd-purple-dark);
+    --bs-btn-active-border-color: var(--cd-purple-dark);
+    --bs-btn-color: white;
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--cd-purple-light);
+    --bs-btn-border-color: var(--cd-purple);
+    --bs-btn-hover-bg: var(--cd-purple);
+    --bs-btn-hover-color: white;
+}
+
+.btn-success {
+    --bs-btn-bg: var(--cd-teal);
+    --bs-btn-border-color: var(--cd-teal);
+    --bs-btn-hover-bg: var(--cd-teal-light);
+    --bs-btn-hover-border-color: var(--cd-teal-light);
+    --bs-btn-color: white;
+}
+
+.btn-info {
+    --bs-btn-bg: var(--cd-blue);
+    --bs-btn-border-color: var(--cd-blue);
+    --bs-btn-hover-bg: var(--cd-blue-light);
+    --bs-btn-hover-border-color: var(--cd-blue-light);
+    --bs-btn-color: white;
+}
+
+/* ── Links ───────────────────────────────────────────────────── */
+
+a {
+    color: var(--cd-blue-light) !important;
+}
+
+a:hover {
+    color: var(--cd-light-blue) !important;
+}
+
+/* ── Badges and tags ─────────────────────────────────────────── */
+
+.badge.bg-primary {
+    background-color: var(--cd-purple) !important;
+}
+
+.badge.bg-success {
+    background-color: var(--cd-teal) !important;
+}
+
+.badge.bg-info {
+    background-color: var(--cd-blue) !important;
+}
+
+/* ── Active / selected states ────────────────────────────────── */
+
+.nav-link.active {
+    background-color: var(--cd-purple) !important;
+    border-color: var(--cd-purple) !important;
+}
+
+.list-group-item.active {
+    background-color: var(--cd-purple) !important;
+    border-color: var(--cd-purple) !important;
+}
+
+/* ── Progress bars ───────────────────────────────────────────── */
+
+.progress-bar {
+    background-color: var(--cd-teal) !important;
+}
+
+/* ── Scrollbar styling (dark mode) ───────────────────────────── */
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--cd-bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--cd-purple);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--cd-purple-light);
+}
+
+/* ── Table enhancements ──────────────────────────────────────── */
+
+.table-hover tbody tr:hover {
+    background-color: rgba(91, 61, 143, 0.15) !important;
+}
+
+/* ── Modality badges ─────────────────────────────────────────── */
+
+.badge-modality {
+    background-color: var(--cd-blue) !important;
+    color: white !important;
+}
+
+/* ── Footer branding ─────────────────────────────────────────── */
+
+.navbar-text, footer {
+    color: var(--cd-text-dim) !important;
+}
