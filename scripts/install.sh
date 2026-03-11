@@ -9,6 +9,9 @@ set -euo pipefail
 INSTALL_DIR="/opt/crowd-image"
 REPO_URL=""  # Set if using git clone, otherwise files are copied in place
 
+# Ensure we're in a valid working directory (in case the user's current dir was deleted)
+cd /tmp || cd /
+
 # ── Colors ──
 RED='\033[0;31m'
 GREEN='\033[0;32m'
