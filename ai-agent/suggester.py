@@ -139,6 +139,7 @@ class RuleSuggester:
                 "filterModality": modality if modality != "Unknown" else "",
                 "filterStudyDescription": f"*{desc}*" if desc else "",
                 "filterSeriesDescription": "",
+                "filterSliceThickness": "",
                 "filterCallingAet": aet,
                 "filterCalledAet": "",
                 "filterDateRange": "",
@@ -419,6 +420,10 @@ class RuleSuggester:
                 conditions.append(
                     f'the series description matches "{series_desc}"'
                 )
+
+        slice_thickness = rule.get("filterSliceThickness", "")
+        if slice_thickness:
+            conditions.append(f"the slice thickness is **{slice_thickness}mm**")
 
         calling_aet = rule.get("filterCallingAet", "")
         if calling_aet:

@@ -459,6 +459,63 @@ function OnStableStudy(studyId, tags, metadata)
   end
 end
 
+-- Get slice thickness from a series (reads from first instance's DICOM tags)
+function GetSeriesSliceThickness(series)
+  local instances = series.Instances or {}
+  if #instances == 0 then return nil end
+
+  local ok, tags = pcall(function()
+    return ParseJson(RestApiGet("/instances/" .. instances[1] .. "/simplified-tags"))
+  end)
+
+  if ok and tags then
+    local thickness = tags.SliceThickness
+    if thickness then
+      return tonumber(thickness)
+    end
+  end
+  return nil
+end
+
+-- Match slice thickness against a filter like "<2", "<=1.5", ">3", ">=0.5", "=1.0"
+function MatchesSliceThickness(thickness, filter)
+  if not thickness then return false end  -- No slice thickness = no match when filter is set
+  if not filter or filter == "" then return true end
+
+  -- Parse operator and value
+  local operator, value
+  if filter:sub(1, 2) == "<=" then
+    operator = "<="
+    value = tonumber(filter:sub(3))
+  elseif filter:sub(1, 2) == ">=" then
+    operator = ">="
+    value = tonumber(filter:sub(3))
+  elseif filter:sub(1, 1) == "<" then
+    operator = "<"
+    value = tonumber(filter:sub(2))
+  elseif filter:sub(1, 1) == ">" then
+    operator = ">"
+    value = tonumber(filter:sub(2))
+  elseif filter:sub(1, 1) == "=" then
+    operator = "="
+    value = tonumber(filter:sub(2))
+  else
+    -- Assume it's just a number meaning "less than or equal"
+    operator = "<="
+    value = tonumber(filter)
+  end
+
+  if not value then return true end  -- Invalid filter value = pass through
+
+  if operator == "<" then return thickness < value
+  elseif operator == "<=" then return thickness <= value
+  elseif operator == ">" then return thickness > value
+  elseif operator == ">=" then return thickness >= value
+  elseif operator == "=" then return math.abs(thickness - value) < 0.01
+  end
+  return true
+end
+
 -- Send matching series from a study (for push rules with series-level)
 function SendMatchingSeriesFromStudy(studyId, study, rule, callingAet, calledAet)
   local seriesList = study.Series or {}
@@ -486,6 +543,14 @@ function SendMatchingSeriesFromStudy(studyId, study, rule, callingAet, calledAet
       -- If rule has modality filter and it's series-level, filter on series modality
       if rule.filterModality and rule.filterModality ~= "" then
         if not MatchesFilter(seriesMod, rule.filterModality) then
+          seriesMatch = false
+        end
+      end
+
+      -- Check slice thickness filter
+      if seriesMatch and rule.filterSliceThickness and rule.filterSliceThickness ~= "" then
+        local sliceThickness = GetSeriesSliceThickness(series)
+        if not MatchesSliceThickness(sliceThickness, rule.filterSliceThickness) then
           seriesMatch = false
         end
       end

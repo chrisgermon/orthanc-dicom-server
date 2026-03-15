@@ -34,6 +34,7 @@ Each routing rule has these fields:
 - **filterModality** (string): Filter by DICOM modality type. Values: CT, MR, CR, XA, US, DX, PT, NM, etc. Use * as wildcard, prefix with ! to negate
 - **filterStudyDescription** (string): Filter by study description text. Use * as wildcard (e.g. "*chest*"), prefix with ! to negate
 - **filterSeriesDescription** (string): Filter by series description. Most useful with series sendLevel. Use * as wildcard, prefix with ! to negate
+- **filterSliceThickness** (string): Filter by slice thickness in mm. Use comparison operators: "<2" (less than 2mm), "<=1.5", ">3", ">=0.5", "=1.0". Only works with series sendLevel. For thin slices (CT lung windows), use "<2". For thick slices, use ">3".
 - **filterCallingAet** (string): Filter by the AE title of the sending scanner/modality. Use * as wildcard, prefix with ! to negate
 - **filterCalledAet** (string): Filter by the AE title this server was called as
 - **filterDateRange** (string): Filter by study date. Values: "", "today", "yesterday", "7days", "30days", "90days"
@@ -148,6 +149,7 @@ Respond ONLY with valid JSON, no markdown code fences or other text."""
             "filterModality": "",
             "filterStudyDescription": "",
             "filterSeriesDescription": "",
+            "filterSliceThickness": "",
             "filterCallingAet": "",
             "filterCalledAet": "",
             "filterDateRange": "",

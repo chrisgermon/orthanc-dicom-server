@@ -590,6 +590,11 @@
         <p style="font-size:11px;color:var(--text-dim);margin-top:4px;">Most useful with Series send level. Use * as wildcard, ! prefix to negate.</p>
       </div>
       <div class="form-group">
+        <label>Slice Thickness (mm)</label>
+        <input type="text" id="ruleFilterSliceThickness" placeholder="e.g. <2, <=1.5, >3">
+        <p style="font-size:11px;color:var(--text-dim);margin-top:4px;">Filter by slice thickness. Use &lt;, &lt;=, &gt;, &gt;=, = operators. Requires Series send level. Example: &lt;2 routes only thin slices.</p>
+      </div>
+      <div class="form-group">
         <label>Date Range</label>
         <select id="ruleFilterDateRange">
           <option value="">Any date</option>
@@ -1059,6 +1064,7 @@ print("OK")`;
         const descFilter = rule.filterStudyDescription || rule.filterDescription || '';
         if (descFilter) filters.push('Study: ' + descFilter);
         if (rule.filterSeriesDescription) filters.push('Series: ' + rule.filterSeriesDescription);
+        if (rule.filterSliceThickness) filters.push('Thickness: ' + rule.filterSliceThickness + 'mm');
         if (rule.filterDateRange) filters.push('Date: ' + rule.filterDateRange);
         if (rule.filterCallingAet) filters.push('Calling AET: ' + rule.filterCallingAet);
         if (rule.filterCalledAet) filters.push('Called AET: ' + rule.filterCalledAet);
@@ -1215,6 +1221,7 @@ print(c)`;
         document.getElementById('ruleFilterModality').value = rule.filterModality || '';
         document.getElementById('ruleFilterStudyDescription').value = rule.filterStudyDescription || rule.filterDescription || '';
         document.getElementById('ruleFilterSeriesDescription').value = rule.filterSeriesDescription || '';
+        document.getElementById('ruleFilterSliceThickness').value = rule.filterSliceThickness || '';
         document.getElementById('ruleFilterDateRange').value = rule.filterDateRange || '';
         document.getElementById('ruleFilterCallingAet').value = rule.filterCallingAet || '';
         document.getElementById('ruleDeleteAfterSend').checked = !!rule.deleteAfterSend;
@@ -1232,6 +1239,7 @@ print(c)`;
         document.getElementById('ruleFilterModality').value = '';
         document.getElementById('ruleFilterStudyDescription').value = '';
         document.getElementById('ruleFilterSeriesDescription').value = '';
+        document.getElementById('ruleFilterSliceThickness').value = '';
         document.getElementById('ruleFilterDateRange').value = '';
         document.getElementById('ruleFilterCallingAet').value = '';
         document.getElementById('ruleDeleteAfterSend').checked = false;
@@ -1261,6 +1269,7 @@ print(c)`;
         filterModality: document.getElementById('ruleFilterModality').value.trim(),
         filterStudyDescription: document.getElementById('ruleFilterStudyDescription').value.trim(),
         filterSeriesDescription: document.getElementById('ruleFilterSeriesDescription').value.trim(),
+        filterSliceThickness: document.getElementById('ruleFilterSliceThickness').value.trim(),
         filterDateRange: document.getElementById('ruleFilterDateRange').value,
         filterCallingAet: ruleType === 'push' ? document.getElementById('ruleFilterCallingAet').value.trim() : '',
         filterCalledAet: ruleType === 'push' ? document.getElementById('ruleFilterCalledAet').value : '',
