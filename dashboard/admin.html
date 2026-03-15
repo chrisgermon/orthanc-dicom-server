@@ -2393,10 +2393,7 @@ print("OK")`;
       if (!confirm('Create this routing rule?\n\n' + (aiChatLastRule.name || 'New rule') + ' → ' + (aiChatLastRule.destination || '?'))) return;
 
       try {
-        // Save rule to routing-rules.json via the suggestions apply mechanism
-        const result = await aiApiPost('/suggestions/0/apply', { destination: '' });
-        // Actually, we need to directly write the rule
-        // Use the same Lua approach as the routing tab
+        // Write the rule directly via Orthanc Lua
         const ruleJson = JSON.stringify(aiChatLastRule).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
         const luaScript = `
 local f = io.open("/var/lib/orthanc/routing-rules.json", "r")
