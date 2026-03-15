@@ -20,6 +20,8 @@ import config
 from models import get_db, now_iso
 from collector import TrafficCollector
 from suggester import RuleSuggester
+from hl7_receiver import HL7Receiver
+from workflow_engine import WorkflowEngine
 import llm
 
 logging.basicConfig(
@@ -30,13 +32,17 @@ logger = logging.getLogger("ai-agent")
 
 collector = TrafficCollector()
 suggester = RuleSuggester()
+workflow_engine = WorkflowEngine()
+hl7_receiver = HL7Receiver(on_message=workflow_engine.on_hl7_message)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     collector.start()
+    hl7_receiver.start()
     logger.info("AI DICOM Routing Agent started")
     yield
+    hl7_receiver.stop()
     collector.stop()
     logger.info("AI DICOM Routing Agent stopped")
 
@@ -65,6 +71,8 @@ def health():
         "service": "ai-dicom-agent",
         "llm_enabled": config.LLM_ENABLED,
         "llm_model": config.ANTHROPIC_MODEL if config.LLM_ENABLED else None,
+        "hl7_enabled": config.HL7_ENABLED,
+        "hl7_port": config.HL7_PORT if config.HL7_ENABLED else None,
     }
 
 
@@ -331,6 +339,251 @@ def collect_now():
     """Trigger an immediate data collection."""
     success = collector.collect_now()
     return {"status": "ok" if success else "error"}
+
+
+# ── HL7 Messages ──
+
+
+@app.get("/api/hl7/messages")
+def hl7_messages(limit: int = 50, offset: int = 0, msg_type: str = ""):
+    """List HL7 messages with optional filtering."""
+    db = get_db()
+    try:
+        where = "1=1"
+        params = []
+        if msg_type:
+            where += " AND message_type = ?"
+            params.append(msg_type)
+
+        params.extend([limit, offset])
+        rows = db.execute(
+            f"""SELECT id, timestamp, message_type, trigger_event,
+                      patient_name, patient_id, accession_number, order_status,
+                      sending_application, sending_facility
+               FROM hl7_messages
+               WHERE {where}
+               ORDER BY timestamp DESC
+               LIMIT ? OFFSET ?""",
+            params,
+        ).fetchall()
+
+        total = db.execute(
+            f"SELECT COUNT(*) as cnt FROM hl7_messages WHERE {where}",
+            params[:-2] if msg_type else [],
+        ).fetchone()["cnt"]
+
+        return {
+            "total": total,
+            "messages": [
+                {
+                    "id": r["id"],
+                    "timestamp": r["timestamp"],
+                    "messageType": r["message_type"],
+                    "triggerEvent": r["trigger_event"],
+                    "patientName": r["patient_name"],
+                    "patientId": r["patient_id"],
+                    "accessionNumber": r["accession_number"],
+                    "orderStatus": r["order_status"],
+                    "sendingApp": r["sending_application"],
+                    "sendingFacility": r["sending_facility"],
+                }
+                for r in rows
+            ],
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/hl7/messages/{message_id}")
+def hl7_message_detail(message_id: int):
+    """Get full HL7 message with raw content and parsed segments."""
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT * FROM hl7_messages WHERE id = ?", (message_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Message not found")
+
+        parsed = []
+        if row["parsed_segments"]:
+            try:
+                parsed = json.loads(row["parsed_segments"])
+            except json.JSONDecodeError:
+                pass
+
+        return {
+            "id": row["id"],
+            "timestamp": row["timestamp"],
+            "messageType": row["message_type"],
+            "triggerEvent": row["trigger_event"],
+            "messageControlId": row["message_control_id"],
+            "patientName": row["patient_name"],
+            "patientId": row["patient_id"],
+            "accessionNumber": row["accession_number"],
+            "orderStatus": row["order_status"],
+            "sendingApp": row["sending_application"],
+            "sendingFacility": row["sending_facility"],
+            "receivingApp": row["receiving_application"],
+            "receivingFacility": row["receiving_facility"],
+            "rawMessage": row["raw_message"],
+            "parsedSegments": parsed,
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/hl7/stats")
+def hl7_stats():
+    """HL7 message statistics."""
+    db = get_db()
+    try:
+        total = db.execute("SELECT COUNT(*) as cnt FROM hl7_messages").fetchone()["cnt"]
+
+        by_type = db.execute(
+            """SELECT message_type, trigger_event, COUNT(*) as cnt
+               FROM hl7_messages
+               GROUP BY message_type, trigger_event
+               ORDER BY cnt DESC LIMIT 20"""
+        ).fetchall()
+
+        recent_24h = db.execute(
+            """SELECT COUNT(*) as cnt FROM hl7_messages
+               WHERE timestamp >= datetime('now', '-1 day')"""
+        ).fetchone()["cnt"]
+
+        return {
+            "total": total,
+            "recent24h": recent_24h,
+            "byType": [
+                {
+                    "type": f"{r['message_type']}^{r['trigger_event']}",
+                    "count": r["cnt"],
+                }
+                for r in by_type
+            ],
+        }
+    finally:
+        db.close()
+
+
+# ── Workflows ──
+
+
+class WorkflowSaveRequest(BaseModel):
+    name: str
+    description: str = ""
+    flow_json: dict
+    enabled: bool = True
+
+
+@app.get("/api/workflows")
+def list_workflows():
+    """List all saved workflows."""
+    db = get_db()
+    try:
+        rows = db.execute(
+            """SELECT id, name, description, enabled, created_at, updated_at
+               FROM workflows ORDER BY created_at DESC"""
+        ).fetchall()
+        return {
+            "workflows": [
+                {
+                    "id": r["id"],
+                    "name": r["name"],
+                    "description": r["description"],
+                    "enabled": bool(r["enabled"]),
+                    "createdAt": r["created_at"],
+                    "updatedAt": r["updated_at"],
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/workflows/{workflow_id}")
+def get_workflow(workflow_id: int):
+    """Get a workflow with its full flow JSON."""
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT * FROM workflows WHERE id = ?", (workflow_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Workflow not found")
+        return {
+            "id": row["id"],
+            "name": row["name"],
+            "description": row["description"],
+            "flowJson": json.loads(row["flow_json"]),
+            "enabled": bool(row["enabled"]),
+            "createdAt": row["created_at"],
+            "updatedAt": row["updated_at"],
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/workflows")
+def save_workflow(body: WorkflowSaveRequest):
+    """Create or update a workflow."""
+    db = get_db()
+    try:
+        now = now_iso()
+        db.execute(
+            """INSERT INTO workflows (name, description, flow_json, enabled, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (body.name, body.description, json.dumps(body.flow_json),
+             1 if body.enabled else 0, now, now),
+        )
+        db.commit()
+        wf_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+        # Reload workflows in engine
+        workflow_engine.reload()
+
+        return {"id": wf_id, "status": "created"}
+    finally:
+        db.close()
+
+
+@app.put("/api/workflows/{workflow_id}")
+def update_workflow(workflow_id: int, body: WorkflowSaveRequest):
+    """Update an existing workflow."""
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT id FROM workflows WHERE id = ?", (workflow_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Workflow not found")
+
+        db.execute(
+            """UPDATE workflows SET name = ?, description = ?, flow_json = ?,
+                      enabled = ?, updated_at = ? WHERE id = ?""",
+            (body.name, body.description, json.dumps(body.flow_json),
+             1 if body.enabled else 0, now_iso(), workflow_id),
+        )
+        db.commit()
+        workflow_engine.reload()
+        return {"id": workflow_id, "status": "updated"}
+    finally:
+        db.close()
+
+
+@app.delete("/api/workflows/{workflow_id}")
+def delete_workflow(workflow_id: int):
+    """Delete a workflow."""
+    db = get_db()
+    try:
+        db.execute("DELETE FROM workflows WHERE id = ?", (workflow_id,))
+        db.commit()
+        workflow_engine.reload()
+        return {"status": "deleted"}
+    finally:
+        db.close()
 
 
 # ── LLM: Natural Language Rule Builder ──

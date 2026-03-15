@@ -64,6 +64,43 @@ def _create_tables(conn):
             ON traffic_events(study_uid);
         CREATE INDEX IF NOT EXISTS idx_suggestions_status
             ON suggestions(status);
+
+        CREATE TABLE IF NOT EXISTS hl7_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            message_type TEXT,
+            trigger_event TEXT,
+            message_control_id TEXT,
+            patient_name TEXT,
+            patient_id TEXT,
+            accession_number TEXT,
+            order_status TEXT,
+            sending_application TEXT,
+            sending_facility TEXT,
+            receiving_application TEXT,
+            receiving_facility TEXT,
+            raw_message TEXT,
+            parsed_segments TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS workflows (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            flow_json TEXT NOT NULL,
+            enabled INTEGER DEFAULT 1,
+            created_at TEXT NOT NULL,
+            updated_at TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_hl7_timestamp
+            ON hl7_messages(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_hl7_message_type
+            ON hl7_messages(message_type);
+        CREATE INDEX IF NOT EXISTS idx_hl7_patient_id
+            ON hl7_messages(patient_id);
+        CREATE INDEX IF NOT EXISTS idx_hl7_accession
+            ON hl7_messages(accession_number);
     """)
     conn.commit()
 

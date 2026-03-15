@@ -34,3 +34,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 LLM_ENABLED = bool(ANTHROPIC_API_KEY)
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+
+# HL7 settings
+HL7_ENABLED = os.getenv("HL7_ENABLED", "true").lower() in ("true", "1", "yes")
+HL7_PORT = int(os.getenv("HL7_PORT", "2575"))

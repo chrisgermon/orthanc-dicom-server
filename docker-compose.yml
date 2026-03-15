@@ -110,6 +110,8 @@ services:
     build: ./ai-agent
     container_name: ai-dicom-agent
     restart: unless-stopped
+    ports:
+      - "2575:2575"  # HL7 MLLP port
     volumes:
       - ./config:/orthanc-data:ro
       - ai-agent-data:/data
@@ -120,6 +122,8 @@ services:
       - ROUTING_RULES_PATH=/orthanc-data/routing-rules.json
       - POLL_INTERVAL_SECONDS=60
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - HL7_ENABLED=true
+      - HL7_PORT=2575
       - TZ=Australia/Brisbane
     depends_on:
       - orthanc

@@ -134,6 +134,27 @@
     .site-footer a { color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
     .site-footer a:hover { color: var(--blue-light); }
   </style>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow/dist/drawflow.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow/dist/drawflow.min.js"></script>
+  <style>
+    /* Drawflow dark mode overrides */
+    .drawflow { background: var(--bg) !important; }
+    .drawflow .drawflow-node { background: var(--card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 12px; min-width: 160px; }
+    .drawflow .drawflow-node.selected { border-color: var(--blue-light); box-shadow: 0 0 10px rgba(99,102,241,0.4); }
+    .drawflow .drawflow-node .title-box { background: rgba(99,102,241,0.15); padding: 6px 12px; border-radius: 7px 7px 0 0; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .drawflow .drawflow-node .box { padding: 8px 12px; font-size: 11px; color: var(--text-muted); }
+    .drawflow .drawflow-node.hl7-trigger .title-box { background: rgba(34,197,94,0.2); color: #22c55e; }
+    .drawflow .drawflow-node.dicom-trigger .title-box { background: rgba(59,130,246,0.2); color: #3b82f6; }
+    .drawflow .drawflow-node.condition .title-box { background: rgba(234,179,8,0.2); color: #eab308; }
+    .drawflow .drawflow-node.action-route .title-box { background: rgba(239,68,68,0.2); color: #ef4444; }
+    .drawflow .drawflow-node.action-query .title-box { background: rgba(249,115,22,0.2); color: #f97316; }
+    .drawflow .drawflow-node.action-notify .title-box { background: rgba(107,114,128,0.2); color: #9ca3af; }
+    .drawflow .connection .main-path { stroke: var(--border); stroke-width: 2; }
+    .drawflow .drawflow-node .input, .drawflow .drawflow-node .output { background: var(--blue-light); }
+    .hl7-seg-name { color: #22c55e; font-weight: 700; }
+    .hl7-field-sep { color: var(--text-dim); }
+    .hl7-comp-sep { color: #f97316; }
+  </style>
 </head>
 <body>
 
@@ -171,6 +192,8 @@
         <button class="nav-tab" data-section="logs">Logs</button>
         <button class="nav-tab" data-section="jobs">Jobs</button>
         <button class="nav-tab" data-section="ai-agent">AI Agent</button>
+        <button class="nav-tab" data-section="hl7">HL7 Messages</button>
+        <button class="nav-tab" data-section="workflows">Workflows</button>
         <button class="nav-tab" data-section="settings">Settings</button>
       </nav>
     </div>
@@ -500,6 +523,121 @@
         </div>
       </div>
     </section>
+
+    <!-- HL7 Messages -->
+    <section class="section" id="sec-hl7">
+      <div class="section-header">
+        <h2 class="section-title">🏥 HL7 Messages</h2>
+        <div style="display:flex;gap:8px;">
+          <select id="hl7TypeFilter" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:12px;">
+            <option value="">All Types</option>
+            <option value="ADT">ADT</option>
+            <option value="ORM">ORM</option>
+            <option value="ORU">ORU</option>
+            <option value="SIU">SIU</option>
+          </select>
+          <button class="btn btn-sm" onclick="loadHL7Messages()">Refresh</button>
+        </div>
+      </div>
+
+      <!-- HL7 Stats -->
+      <div class="stats-grid" style="margin-bottom:16px;">
+        <div class="stat-card"><div class="stat-label">Total Messages</div><div class="stat-value" id="hl7StatTotal">-</div></div>
+        <div class="stat-card"><div class="stat-label">Last 24h</div><div class="stat-value" id="hl7Stat24h">-</div></div>
+        <div class="stat-card"><div class="stat-label">Listening Port</div><div class="stat-value" id="hl7StatPort">2575</div></div>
+      </div>
+
+      <!-- HL7 Type Breakdown -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-title">Message Types</div>
+        <div id="hl7TypeBreakdown" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+      </div>
+
+      <!-- HL7 Message List -->
+      <div class="card">
+        <div class="card-title">Recent Messages <span id="hl7MsgCount" style="font-size:12px;font-weight:400;color:var(--text-muted);"></span></div>
+        <div id="hl7MessageList"></div>
+        <div id="hl7MessagesEmpty" style="display:none;text-align:center;padding:32px;color:var(--text-muted);">
+          <div style="font-size:36px;margin-bottom:8px;opacity:0.5;">📨</div>
+          <p style="font-size:13px;">No HL7 messages received yet. The MLLP listener is active on port 2575.</p>
+        </div>
+      </div>
+
+      <!-- HL7 Message Detail Modal -->
+      <div class="modal-overlay" id="hl7DetailModal">
+        <div class="modal" style="max-width:800px;">
+          <div class="modal-title">HL7 Message Detail</div>
+          <div id="hl7DetailContent" style="max-height:70vh;overflow-y:auto;"></div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+            <button class="btn" onclick="document.getElementById('hl7DetailModal').classList.remove('open')">Close</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Workflow Builder -->
+    <section class="section" id="sec-workflows">
+      <div class="section-header">
+        <h2 class="section-title">🔧 Workflow Builder</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-sm btn-primary" onclick="newWorkflow()">➕ New Workflow</button>
+          <button class="btn btn-sm" onclick="loadWorkflowList()">Refresh</button>
+        </div>
+      </div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Design routing workflows visually. Drag nodes from the palette, connect them to build automation rules triggered by HL7 messages or DICOM events.</p>
+
+      <!-- Saved Workflows List -->
+      <div class="card" id="workflowListCard" style="margin-bottom:16px;">
+        <div class="card-title">Saved Workflows</div>
+        <div id="workflowList"></div>
+        <div id="workflowListEmpty" style="display:none;text-align:center;padding:24px;color:var(--text-muted);">
+          <div style="font-size:36px;margin-bottom:8px;opacity:0.5;">📊</div>
+          <p style="font-size:13px;">No workflows yet. Click "New Workflow" to get started.</p>
+        </div>
+      </div>
+
+      <!-- Workflow Editor (hidden until editing) -->
+      <div id="workflowEditor" style="display:none;">
+        <div class="card" style="margin-bottom:12px;">
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+            <input type="text" id="wfName" placeholder="Workflow name" style="flex:1;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;">
+            <input type="text" id="wfDescription" placeholder="Description (optional)" style="flex:2;min-width:200px;padding:8px 12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;">
+            <button class="btn btn-primary btn-sm" onclick="saveWorkflow()">💾 Save</button>
+            <button class="btn btn-sm" onclick="closeWorkflowEditor()">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Node Palette -->
+        <div class="card" style="margin-bottom:12px;">
+          <div class="card-title" style="margin-bottom:8px;">Node Palette <span style="font-size:11px;font-weight:400;color:var(--text-muted);">— drag onto canvas</span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <div class="wf-palette-node" draggable="true" data-node="hl7-trigger" style="background:#22c55e;color:#fff;padding:6px 14px;border-radius:6px;cursor:grab;font-size:12px;font-weight:600;">🟢 HL7 Trigger</div>
+            <div class="wf-palette-node" draggable="true" data-node="dicom-trigger" style="background:#3b82f6;color:#fff;padding:6px 14px;border-radius:6px;cursor:grab;font-size:12px;font-weight:600;">🟣 DICOM Trigger</div>
+            <div class="wf-palette-node" draggable="true" data-node="condition" style="background:#eab308;color:#000;padding:6px 14px;border-radius:6px;cursor:grab;font-size:12px;font-weight:600;">🟡 Condition</div>
+            <div class="wf-palette-node" draggable="true" data-node="action-route" style="background:#ef4444;color:#fff;padding:6px 14px;border-radius:6px;cursor:grab;font-size:12px;font-weight:600;">🟤 Route</div>
+            <div class="wf-palette-node" draggable="true" data-node="action-query" style="background:#f97316;color:#fff;padding:6px 14px;border-radius:6px;cursor:grab;font-size:12px;font-weight:600;">🟠 Query PACS</div>
+            <div class="wf-palette-node" draggable="true" data-node="action-notify" style="background:#6b7280;color:#fff;padding:6px 14px;border-radius:6px;cursor:grab;font-size:12px;font-weight:600;">⚪ Notify</div>
+          </div>
+        </div>
+
+        <!-- Drawflow Canvas -->
+        <div class="card" style="padding:0;overflow:hidden;border:2px solid var(--border);">
+          <div id="drawflowCanvas" style="width:100%;height:500px;background:var(--bg);"></div>
+        </div>
+
+        <!-- Node Config Panel -->
+        <div class="modal-overlay" id="nodeConfigModal">
+          <div class="modal" style="max-width:500px;">
+            <div class="modal-title" id="nodeConfigTitle">Configure Node</div>
+            <div id="nodeConfigContent"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+              <button class="btn" onclick="document.getElementById('nodeConfigModal').classList.remove('open')">Close</button>
+              <button class="btn btn-primary" onclick="applyNodeConfig()">Apply</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- Modality Modal -->
@@ -746,6 +884,8 @@
         if (sec === 'logs') loadChanges();
         if (sec === 'jobs') loadJobs();
         if (sec === 'ai-agent') { loadAiTraffic(); loadAiSuggestions(); loadAiExplainer(); }
+        if (sec === 'hl7') { loadHL7Messages(); }
+        if (sec === 'workflows') { loadWorkflowList(); }
         if (sec === 'settings') loadSettings();
       });
     });
@@ -2334,6 +2474,367 @@ end`;
       } catch (e) {
         // AI agent not available
       }
+    }
+
+    // ── HL7 Messages ──
+    async function loadHL7Messages() {
+      try {
+        const typeFilter = document.getElementById('hl7TypeFilter').value;
+        const statsData = await aiApi('/hl7/stats');
+        document.getElementById('hl7StatTotal').textContent = (statsData.total || 0).toLocaleString();
+        document.getElementById('hl7Stat24h').textContent = (statsData.recent24h || 0).toLocaleString();
+
+        // Type breakdown badges
+        const typeEl = document.getElementById('hl7TypeBreakdown');
+        if (statsData.byType && statsData.byType.length > 0) {
+          typeEl.innerHTML = statsData.byType.map(t => {
+            const colors = { 'ADT': '#3b82f6', 'ORM': '#22c55e', 'ORU': '#f97316', 'SIU': '#8b5cf6', 'ACK': '#6b7280' };
+            const baseType = t.type.split('^')[0];
+            const color = colors[baseType] || '#6b7280';
+            return `<span style="padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600;background:${color}20;color:${color};border:1px solid ${color}40;">${esc(t.type)}: ${t.count}</span>`;
+          }).join('');
+        } else {
+          typeEl.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">No messages yet</span>';
+        }
+
+        // Message list
+        const qp = typeFilter ? `?msg_type=${typeFilter}` : '';
+        const data = await aiApi('/hl7/messages' + qp);
+        const listEl = document.getElementById('hl7MessageList');
+        const emptyEl = document.getElementById('hl7MessagesEmpty');
+        document.getElementById('hl7MsgCount').textContent = `(${data.total} total)`;
+
+        if (!data.messages || data.messages.length === 0) {
+          listEl.innerHTML = '';
+          emptyEl.style.display = 'block';
+          return;
+        }
+        emptyEl.style.display = 'none';
+
+        listEl.innerHTML = '<table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="text-align:left;border-bottom:1px solid var(--border);">' +
+          '<th style="padding:8px;">Time</th><th style="padding:8px;">Type</th><th style="padding:8px;">Patient</th><th style="padding:8px;">PID</th><th style="padding:8px;">Accession</th><th style="padding:8px;">Status</th><th style="padding:8px;">From</th><th style="padding:8px;"></th></tr></thead><tbody>' +
+          data.messages.map(m => {
+            const typeColor = {'ADT':'#3b82f6','ORM':'#22c55e','ORU':'#f97316'}[m.messageType] || '#6b7280';
+            return `<tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="viewHL7Detail(${m.id})">
+              <td style="padding:8px;color:var(--text-muted);">${esc(m.timestamp || '').replace('T',' ').replace('Z','')}</td>
+              <td style="padding:8px;"><span style="padding:2px 8px;border-radius:4px;background:${typeColor}20;color:${typeColor};font-weight:600;font-size:11px;">${esc(m.messageType)}^${esc(m.triggerEvent)}</span></td>
+              <td style="padding:8px;">${esc(m.patientName || '-')}</td>
+              <td style="padding:8px;color:var(--text-muted);">${esc(m.patientId || '-')}</td>
+              <td style="padding:8px;">${esc(m.accessionNumber || '-')}</td>
+              <td style="padding:8px;">${esc(m.orderStatus || '-')}</td>
+              <td style="padding:8px;color:var(--text-muted);">${esc(m.sendingApp || '')}</td>
+              <td style="padding:8px;"><button class="btn btn-sm" onclick="event.stopPropagation();viewHL7Detail(${m.id})">View</button></td>
+            </tr>`;
+          }).join('') + '</tbody></table>';
+      } catch (e) {
+        document.getElementById('hl7MessagesEmpty').style.display = 'block';
+      }
+    }
+
+    async function viewHL7Detail(id) {
+      try {
+        const msg = await aiApi('/hl7/messages/' + id);
+        const modal = document.getElementById('hl7DetailModal');
+        const content = document.getElementById('hl7DetailContent');
+
+        // Format raw HL7 with syntax highlighting
+        let rawHtml = '';
+        if (msg.rawMessage) {
+          const lines = msg.rawMessage.split(/\r|\n/).filter(l => l.trim());
+          rawHtml = lines.map(line => {
+            const fields = line.split('|');
+            const segName = fields[0];
+            return `<span class="hl7-seg-name">${esc(segName)}</span>` +
+              fields.slice(1).map(f => '<span class="hl7-field-sep">|</span>' + esc(f).replace(/\^/g, '<span class="hl7-comp-sep">^</span>')).join('');
+          }).join('<br>');
+        }
+
+        content.innerHTML = `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+            <div><span style="font-size:11px;color:var(--text-muted);">Type</span><div style="font-weight:600;">${esc(msg.messageType)}^${esc(msg.triggerEvent)}</div></div>
+            <div><span style="font-size:11px;color:var(--text-muted);">Control ID</span><div>${esc(msg.messageControlId || '-')}</div></div>
+            <div><span style="font-size:11px;color:var(--text-muted);">Patient</span><div style="font-weight:600;">${esc(msg.patientName || '-')}</div></div>
+            <div><span style="font-size:11px;color:var(--text-muted);">Patient ID</span><div>${esc(msg.patientId || '-')}</div></div>
+            <div><span style="font-size:11px;color:var(--text-muted);">Accession</span><div style="font-weight:600;">${esc(msg.accessionNumber || '-')}</div></div>
+            <div><span style="font-size:11px;color:var(--text-muted);">Order Status</span><div>${esc(msg.orderStatus || '-')}</div></div>
+            <div><span style="font-size:11px;color:var(--text-muted);">From</span><div>${esc(msg.sendingApp || '')} @ ${esc(msg.sendingFacility || '')}</div></div>
+            <div><span style="font-size:11px;color:var(--text-muted);">To</span><div>${esc(msg.receivingApp || '')} @ ${esc(msg.receivingFacility || '')}</div></div>
+          </div>
+          <div style="font-size:12px;font-weight:600;margin-bottom:6px;">Raw HL7 Message</div>
+          <div style="padding:12px;background:var(--bg);border-radius:6px;font-family:'SF Mono','Menlo',monospace;font-size:11px;line-height:1.8;overflow-x:auto;white-space:nowrap;">${rawHtml}</div>`;
+
+        modal.classList.add('open');
+      } catch (e) {
+        toast('Failed to load message: ' + e.message, 'error');
+      }
+    }
+
+    // ── Workflow Builder ──
+    let drawflowEditor = null;
+    let currentEditingNodeId = null;
+    let currentWorkflowId = null;
+
+    async function loadWorkflowList() {
+      try {
+        const data = await aiApi('/workflows');
+        const listEl = document.getElementById('workflowList');
+        const emptyEl = document.getElementById('workflowListEmpty');
+
+        if (!data.workflows || data.workflows.length === 0) {
+          listEl.innerHTML = '';
+          emptyEl.style.display = 'block';
+          return;
+        }
+        emptyEl.style.display = 'none';
+
+        listEl.innerHTML = data.workflows.map(w => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-weight:600;font-size:13px;">${esc(w.name)}</div>
+              <div style="font-size:11px;color:var(--text-muted);">${esc(w.description || 'No description')} &middot; ${w.enabled ? '<span style="color:var(--success);">Enabled</span>' : '<span style="color:var(--text-dim);">Disabled</span>'}</div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-sm" onclick="editWorkflow(${w.id})">Edit</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteWorkflow(${w.id})">Delete</button>
+            </div>
+          </div>`).join('');
+      } catch (e) {
+        document.getElementById('workflowListEmpty').style.display = 'block';
+      }
+    }
+
+    function initDrawflow() {
+      const container = document.getElementById('drawflowCanvas');
+      if (!container) return;
+      container.innerHTML = '';
+      drawflowEditor = new Drawflow(container);
+      drawflowEditor.reroute = true;
+      drawflowEditor.start();
+
+      // Double-click to configure nodes
+      drawflowEditor.on('nodeSelected', function(nodeId) {
+        // Single click - just selects
+      });
+      drawflowEditor.on('nodeMoved', function() {});
+
+      // Double click handler
+      container.addEventListener('dblclick', function(e) {
+        const nodeEl = e.target.closest('.drawflow-node');
+        if (nodeEl) {
+          const nodeId = nodeEl.id.replace('node-', '');
+          openNodeConfig(parseInt(nodeId));
+        }
+      });
+
+      // Drop handler
+      container.addEventListener('drop', handleCanvasDrop);
+      container.addEventListener('dragover', e => e.preventDefault());
+    }
+
+    function newWorkflow() {
+      currentWorkflowId = null;
+      document.getElementById('wfName').value = '';
+      document.getElementById('wfDescription').value = '';
+      document.getElementById('workflowEditor').style.display = 'block';
+      initDrawflow();
+    }
+
+    async function editWorkflow(id) {
+      try {
+        const wf = await aiApi('/workflows/' + id);
+        currentWorkflowId = id;
+        document.getElementById('wfName').value = wf.name;
+        document.getElementById('wfDescription').value = wf.description || '';
+        document.getElementById('workflowEditor').style.display = 'block';
+        initDrawflow();
+        if (wf.flowJson) {
+          drawflowEditor.import(wf.flowJson);
+        }
+      } catch (e) {
+        toast('Failed to load workflow: ' + e.message, 'error');
+      }
+    }
+
+    function closeWorkflowEditor() {
+      document.getElementById('workflowEditor').style.display = 'none';
+      currentWorkflowId = null;
+    }
+
+    async function saveWorkflow() {
+      const name = document.getElementById('wfName').value.trim();
+      if (!name) { toast('Please enter a workflow name', 'error'); return; }
+
+      const flowJson = drawflowEditor.export();
+      const body = {
+        name: name,
+        description: document.getElementById('wfDescription').value.trim(),
+        flow_json: flowJson,
+        enabled: true
+      };
+
+      try {
+        if (currentWorkflowId) {
+          await fetch(AI_API + '/workflows/' + currentWorkflowId, {
+            method: 'PUT',
+            headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          toast('Workflow updated', 'success');
+        } else {
+          const result = await aiApiPost('/workflows', body);
+          currentWorkflowId = result.id;
+          toast('Workflow saved', 'success');
+        }
+        loadWorkflowList();
+      } catch (e) {
+        toast('Failed to save workflow: ' + e.message, 'error');
+      }
+    }
+
+    async function deleteWorkflow(id) {
+      if (!confirm('Delete this workflow?')) return;
+      try {
+        await fetch(AI_API + '/workflows/' + id, {
+          method: 'DELETE',
+          headers: { 'Authorization': authHeader }
+        });
+        toast('Workflow deleted', 'success');
+        loadWorkflowList();
+      } catch (e) {
+        toast('Failed to delete workflow: ' + e.message, 'error');
+      }
+    }
+
+    // Drag from palette onto canvas
+    document.querySelectorAll('.wf-palette-node').forEach(node => {
+      node.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('node-type', node.dataset.node);
+      });
+    });
+
+    function handleCanvasDrop(e) {
+      e.preventDefault();
+      const nodeType = e.dataTransfer.getData('node-type');
+      if (!nodeType || !drawflowEditor) return;
+
+      const rect = e.target.closest('#drawflowCanvas').getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const nodeTemplates = {
+        'hl7-trigger': { title: 'HL7 Trigger', inputs: 0, outputs: 1, html: '<div class="title-box">\ud83d\udfe2 HL7 Trigger</div><div class="box">Double-click to configure</div>' },
+        'dicom-trigger': { title: 'DICOM Trigger', inputs: 0, outputs: 1, html: '<div class="title-box">\ud83d\udfe3 DICOM Trigger</div><div class="box">Double-click to configure</div>' },
+        'condition': { title: 'Condition', inputs: 1, outputs: 1, html: '<div class="title-box">\ud83d\udfe1 Condition</div><div class="box">Double-click to configure</div>' },
+        'action-route': { title: 'Route', inputs: 1, outputs: 0, html: '<div class="title-box">\ud83d\udfe4 Route to Destination</div><div class="box">Double-click to configure</div>' },
+        'action-query': { title: 'Query PACS', inputs: 1, outputs: 1, html: '<div class="title-box">\ud83d\udfe0 Query PACS</div><div class="box">Double-click to configure</div>' },
+        'action-notify': { title: 'Notify', inputs: 1, outputs: 0, html: '<div class="title-box">\u26aa Notify / Log</div><div class="box">Double-click to configure</div>' },
+      };
+
+      const tmpl = nodeTemplates[nodeType];
+      if (!tmpl) return;
+
+      drawflowEditor.addNode(nodeType, tmpl.inputs, tmpl.outputs, x, y, nodeType, {}, tmpl.html);
+    }
+
+    function openNodeConfig(nodeId) {
+      if (!drawflowEditor) return;
+      const nodeData = drawflowEditor.getNodeFromId(nodeId);
+      if (!nodeData) return;
+
+      currentEditingNodeId = nodeId;
+      const nodeClass = nodeData.class;
+      const data = nodeData.data || {};
+      const modal = document.getElementById('nodeConfigModal');
+      const title = document.getElementById('nodeConfigTitle');
+      const content = document.getElementById('nodeConfigContent');
+
+      const configs = {
+        'hl7-trigger': {
+          title: 'Configure HL7 Trigger',
+          html: `
+            <div class="form-group"><label>Message Type</label>
+              <select id="ncMessageType"><option value="">Any</option><option value="ADT" ${data.messageType==='ADT'?'selected':''}>ADT</option><option value="ORM" ${data.messageType==='ORM'?'selected':''}>ORM</option><option value="ORU" ${data.messageType==='ORU'?'selected':''}>ORU</option><option value="SIU" ${data.messageType==='SIU'?'selected':''}>SIU</option></select>
+            </div>
+            <div class="form-group"><label>Trigger Event</label><input type="text" id="ncTriggerEvent" value="${esc(data.triggerEvent||'')}" placeholder="e.g. A01, A08, O01"></div>
+            <div class="form-group"><label>Order Status</label><input type="text" id="ncOrderStatus" value="${esc(data.orderStatus||'')}" placeholder="e.g. CM, SC, IP"></div>`
+        },
+        'dicom-trigger': {
+          title: 'Configure DICOM Trigger',
+          html: `
+            <div class="form-group"><label>Modality</label><input type="text" id="ncModality" value="${esc(data.modality||'')}" placeholder="e.g. CT, MR, US"></div>
+            <div class="form-group"><label>Study Description</label><input type="text" id="ncStudyDescription" value="${esc(data.studyDescription||'')}" placeholder="e.g. *chest*"></div>`
+        },
+        'condition': {
+          title: 'Configure Condition',
+          html: `
+            <div class="form-group"><label>Field</label>
+              <select id="ncField"><option value="modality" ${data.field==='modality'?'selected':''}>Modality</option><option value="study_description" ${data.field==='study_description'?'selected':''}>Study Description</option><option value="patient_name" ${data.field==='patient_name'?'selected':''}>Patient Name</option><option value="patient_id" ${data.field==='patient_id'?'selected':''}>Patient ID</option><option value="accession_number" ${data.field==='accession_number'?'selected':''}>Accession Number</option><option value="order_status" ${data.field==='order_status'?'selected':''}>Order Status</option><option value="message_type" ${data.field==='message_type'?'selected':''}>Message Type</option></select>
+            </div>
+            <div class="form-group"><label>Operator</label>
+              <select id="ncOperator"><option value="equals" ${data.operator==='equals'?'selected':''}>Equals</option><option value="not_equals" ${data.operator==='not_equals'?'selected':''}>Not Equals</option><option value="contains" ${data.operator==='contains'?'selected':''}>Contains</option><option value="not_contains" ${data.operator==='not_contains'?'selected':''}>Not Contains</option><option value="starts_with" ${data.operator==='starts_with'?'selected':''}>Starts With</option></select>
+            </div>
+            <div class="form-group"><label>Value</label><input type="text" id="ncValue" value="${esc(data.value||'')}"></div>`
+        },
+        'action-route': {
+          title: 'Configure Route Action',
+          html: `<div class="form-group"><label>Destination Modality</label><input type="text" id="ncDestination" value="${esc(data.destination||'')}" placeholder="e.g. RESEARCH_PACS"></div>`
+        },
+        'action-query': {
+          title: 'Configure Query Action',
+          html: `
+            <div class="form-group"><label>Accession Number</label><input type="text" id="ncAccessionNumber" value="${esc(data.accessionNumber||'')}" placeholder="Leave blank to use from trigger"></div>
+            <div class="form-group"><label>Patient ID</label><input type="text" id="ncPatientId" value="${esc(data.patientId||'')}" placeholder="Leave blank to use from trigger"></div>
+            <div class="form-group"><label>Modality Filter</label><input type="text" id="ncModality" value="${esc(data.modality||'')}" placeholder="e.g. CT"></div>`
+        },
+        'action-notify': {
+          title: 'Configure Notification',
+          html: `<div class="form-group"><label>Message</label><input type="text" id="ncMessage" value="${esc(data.message||'')}" placeholder="Notification message"></div>`
+        }
+      };
+
+      const cfg = configs[nodeClass];
+      if (!cfg) { toast('Unknown node type', 'error'); return; }
+
+      title.textContent = cfg.title;
+      content.innerHTML = cfg.html;
+      modal.classList.add('open');
+    }
+
+    function applyNodeConfig() {
+      if (!currentEditingNodeId || !drawflowEditor) return;
+      const nodeData = drawflowEditor.getNodeFromId(currentEditingNodeId);
+      const nodeClass = nodeData.class;
+      let data = {};
+
+      if (nodeClass === 'hl7-trigger') {
+        data = { messageType: document.getElementById('ncMessageType').value, triggerEvent: document.getElementById('ncTriggerEvent').value, orderStatus: document.getElementById('ncOrderStatus').value };
+        drawflowEditor.updateNodeDataFromId(currentEditingNodeId, data);
+        const label = [data.messageType, data.triggerEvent].filter(Boolean).join('^') || 'Any';
+        drawflowEditor.updateNodeHtml(currentEditingNodeId, `<div class="title-box">\ud83d\udfe2 HL7: ${esc(label)}</div><div class="box">${data.orderStatus ? 'Status: '+esc(data.orderStatus) : 'Any status'}</div>`);
+      } else if (nodeClass === 'dicom-trigger') {
+        data = { modality: document.getElementById('ncModality').value, studyDescription: document.getElementById('ncStudyDescription').value };
+        drawflowEditor.updateNodeDataFromId(currentEditingNodeId, data);
+        drawflowEditor.updateNodeHtml(currentEditingNodeId, `<div class="title-box">\ud83d\udfe3 DICOM: ${esc(data.modality||'Any')}</div><div class="box">${data.studyDescription ? esc(data.studyDescription) : 'Any study'}</div>`);
+      } else if (nodeClass === 'condition') {
+        data = { field: document.getElementById('ncField').value, operator: document.getElementById('ncOperator').value, value: document.getElementById('ncValue').value };
+        drawflowEditor.updateNodeDataFromId(currentEditingNodeId, data);
+        drawflowEditor.updateNodeHtml(currentEditingNodeId, `<div class="title-box">\ud83d\udfe1 Condition</div><div class="box">${esc(data.field)} ${esc(data.operator)} ${esc(data.value)}</div>`);
+      } else if (nodeClass === 'action-route') {
+        data = { destination: document.getElementById('ncDestination').value };
+        drawflowEditor.updateNodeDataFromId(currentEditingNodeId, data);
+        drawflowEditor.updateNodeHtml(currentEditingNodeId, `<div class="title-box">\ud83d\udfe4 Route</div><div class="box">\u2192 ${esc(data.destination||'?')}</div>`);
+      } else if (nodeClass === 'action-query') {
+        data = { accessionNumber: document.getElementById('ncAccessionNumber').value, patientId: document.getElementById('ncPatientId').value, modality: document.getElementById('ncModality').value };
+        drawflowEditor.updateNodeDataFromId(currentEditingNodeId, data);
+        drawflowEditor.updateNodeHtml(currentEditingNodeId, `<div class="title-box">\ud83d\udfe0 Query PACS</div><div class="box">${data.accessionNumber ? 'Acc: '+esc(data.accessionNumber) : data.patientId ? 'PID: '+esc(data.patientId) : 'From trigger'}</div>`);
+      } else if (nodeClass === 'action-notify') {
+        data = { message: document.getElementById('ncMessage').value };
+        drawflowEditor.updateNodeDataFromId(currentEditingNodeId, data);
+        drawflowEditor.updateNodeHtml(currentEditingNodeId, `<div class="title-box">\u26aa Notify</div><div class="box">${esc(data.message||'...')}</div>`);
+      }
+
+      document.getElementById('nodeConfigModal').classList.remove('open');
+      currentEditingNodeId = null;
     }
 
     // Close modals on overlay click
