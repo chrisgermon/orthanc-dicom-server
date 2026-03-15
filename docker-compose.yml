@@ -119,6 +119,7 @@ services:
       - ROUTING_LOG_PATH=/orthanc-data/routing-log.json
       - ROUTING_RULES_PATH=/orthanc-data/routing-rules.json
       - POLL_INTERVAL_SECONDS=60
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - TZ=Australia/Brisbane
     depends_on:
       - orthanc

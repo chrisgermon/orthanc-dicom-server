@@ -20,6 +20,7 @@ import config
 from models import get_db, now_iso
 from collector import TrafficCollector
 from suggester import RuleSuggester
+import llm
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,7 +60,12 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "service": "ai-dicom-agent"}
+    return {
+        "status": "ok",
+        "service": "ai-dicom-agent",
+        "llm_enabled": config.LLM_ENABLED,
+        "llm_model": config.ANTHROPIC_MODEL if config.LLM_ENABLED else None,
+    }
 
 
 # ── Traffic Summary ──
@@ -325,6 +331,105 @@ def collect_now():
     """Trigger an immediate data collection."""
     success = collector.collect_now()
     return {"status": "ok" if success else "error"}
+
+
+# ── LLM: Natural Language Rule Builder ──
+
+
+class BuildRuleRequest(BaseModel):
+    prompt: str
+
+
+@app.post("/api/rules/build")
+def build_rule(body: BuildRuleRequest):
+    """Convert natural language to a routing rule using Claude."""
+    if not config.LLM_ENABLED:
+        raise HTTPException(503, "LLM not configured — set ANTHROPIC_API_KEY")
+
+    # Get available modalities and current rules for context
+    modalities = _get_modalities()
+    current_rules = _load_rules()
+
+    try:
+        result = llm.parse_natural_language_rule(
+            prompt=body.prompt,
+            available_modalities=modalities,
+            current_rules=current_rules,
+        )
+        return result
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+
+
+class ChatRequest(BaseModel):
+    message: str
+    conversation: list[dict] = []
+
+
+@app.post("/api/chat")
+def chat_endpoint(body: ChatRequest):
+    """Conversational rule building with Claude."""
+    if not config.LLM_ENABLED:
+        raise HTTPException(503, "LLM not configured — set ANTHROPIC_API_KEY")
+
+    modalities = _get_modalities()
+    current_rules = _load_rules()
+
+    try:
+        result = llm.chat(
+            message=body.message,
+            conversation_history=body.conversation,
+            available_modalities=modalities,
+            current_rules=current_rules,
+        )
+        return result
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+
+
+def _get_modalities():
+    """Get configured DICOM modalities from Orthanc."""
+    try:
+        import requests
+        resp = requests.get(
+            f"{config.ORTHANC_URL}/modalities",
+            auth=(config.ORTHANC_USER, config.ORTHANC_PASS) if config.ORTHANC_USER else None,
+            timeout=5,
+        )
+        if resp.ok:
+            names = resp.json()
+            modalities = []
+            for name in names:
+                try:
+                    detail = requests.get(
+                        f"{config.ORTHANC_URL}/modalities/{name}/configuration",
+                        auth=(config.ORTHANC_USER, config.ORTHANC_PASS) if config.ORTHANC_USER else None,
+                        timeout=5,
+                    )
+                    if detail.ok:
+                        d = detail.json()
+                        modalities.append({"name": name, **d})
+                    else:
+                        modalities.append({"name": name})
+                except Exception:
+                    modalities.append({"name": name})
+            return modalities
+    except Exception:
+        pass
+    return []
+
+
+def _load_rules():
+    """Load current routing rules."""
+    import os
+    path = config.ROUTING_RULES_PATH
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, "r") as f:
+            return json.loads(f.read().strip() or "[]")
+    except (json.JSONDecodeError, IOError):
+        return []
 
 
 if __name__ == "__main__":

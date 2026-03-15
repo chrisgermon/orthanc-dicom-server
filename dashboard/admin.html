@@ -434,6 +434,18 @@
       <!-- AI Status -->
       <div id="aiStatusBanner" style="display:none;margin-bottom:16px;padding:12px 16px;border-radius:8px;font-size:13px;"></div>
 
+      <!-- Natural Language Rule Builder (shown when LLM is available) -->
+      <div class="card" id="aiChatPanel" style="display:none;margin-bottom:16px;">
+        <div class="card-title">💬 Natural Language Rule Builder <span style="font-size:11px;font-weight:400;padding:2px 8px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:10px;margin-left:6px;">Claude</span></div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Describe the routing rule you want in plain English. Claude will generate the rule for you.</p>
+        <div id="aiChatMessages" style="max-height:400px;overflow-y:auto;margin-bottom:12px;display:flex;flex-direction:column;gap:10px;"></div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="aiChatInput" placeholder='e.g. &quot;Route all CT chest studies from CT_EAST to the research PACS&quot;' style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;" onkeydown="if(event.key==='Enter')sendAiChat()">
+          <button class="btn" id="aiChatSendBtn" onclick="sendAiChat()" style="background:linear-gradient(135deg,#667eea,#764ba2);border:none;">✨ Ask Claude</button>
+        </div>
+        <div id="aiChatRule" style="display:none;margin-top:12px;"></div>
+      </div>
+
       <!-- Traffic Monitor -->
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
@@ -1960,6 +1972,8 @@ print("OK")`;
 
     // ── AI Agent ──
     const AI_API = '/ai-api';
+    let aiChatConversation = [];
+    let aiChatLastRule = null;
 
     async function aiApi(path) {
       const res = await fetch(AI_API + path, {
@@ -1999,6 +2013,12 @@ print("OK")`;
       try {
         const data = await aiApi('/traffic/summary');
         document.getElementById('aiStatusBanner').style.display = 'none';
+
+        // Check if LLM is enabled and show/hide chat panel
+        try {
+          const health = await aiApi('/health');
+          document.getElementById('aiChatPanel').style.display = health.llm_enabled ? 'block' : 'none';
+        } catch(e) {}
 
         document.getElementById('aiStat24h').textContent = (data.totals['24h'] || 0).toLocaleString();
         document.getElementById('aiStat7d').textContent = (data.totals['7d'] || 0).toLocaleString();
@@ -2133,6 +2153,135 @@ print("OK")`;
         loadAiSuggestions();
       } catch (e) {
         toast('Failed to dismiss: ' + e.message, 'error');
+      }
+    }
+
+    // ── Natural Language Rule Builder (Chat) ──
+    async function sendAiChat() {
+      const input = document.getElementById('aiChatInput');
+      const msg = input.value.trim();
+      if (!msg) return;
+
+      input.value = '';
+      const sendBtn = document.getElementById('aiChatSendBtn');
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Thinking...';
+
+      // Add user message to UI
+      addChatMessage('user', msg);
+
+      try {
+        const result = await aiApiPost('/chat', {
+          message: msg,
+          conversation: aiChatConversation
+        });
+
+        // Update conversation history
+        aiChatConversation = result.conversation || [];
+
+        // Add Claude response to UI
+        addChatMessage('assistant', result.response);
+
+        // If a rule was extracted, show it
+        if (result.rule) {
+          aiChatLastRule = result.rule;
+          showChatRule(result.rule);
+        }
+      } catch (e) {
+        addChatMessage('system', 'Error: ' + e.message);
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = '✨ Ask Claude';
+      }
+    }
+
+    function addChatMessage(role, content) {
+      const container = document.getElementById('aiChatMessages');
+      const div = document.createElement('div');
+
+      if (role === 'user') {
+        div.style.cssText = 'align-self:flex-end;max-width:80%;padding:10px 14px;border-radius:12px 12px 2px 12px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-size:13px;line-height:1.5;';
+        div.textContent = content;
+      } else if (role === 'assistant') {
+        div.style.cssText = 'align-self:flex-start;max-width:85%;padding:10px 14px;border-radius:12px 12px 12px 2px;background:var(--card);border:1px solid var(--border);font-size:13px;line-height:1.6;color:var(--text);';
+        // Convert markdown-style formatting
+        let html = esc(content)
+          .replace(/```json\n([\s\S]*?)```/g, '<pre style="margin:8px 0;padding:8px 12px;background:var(--bg);border-radius:6px;font-family:monospace;font-size:11px;overflow-x:auto;white-space:pre-wrap;">$1</pre>')
+          .replace(/```([\s\S]*?)```/g, '<pre style="margin:8px 0;padding:8px 12px;background:var(--bg);border-radius:6px;font-family:monospace;font-size:11px;overflow-x:auto;white-space:pre-wrap;">$1</pre>')
+          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.*?)\*/g, '<em>$1</em>')
+          .replace(/\n/g, '<br>');
+        div.innerHTML = html;
+      } else {
+        div.style.cssText = 'text-align:center;font-size:12px;color:var(--danger);padding:4px;';
+        div.textContent = content;
+      }
+
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function showChatRule(rule) {
+      const el = document.getElementById('aiChatRule');
+      el.style.display = 'block';
+      el.innerHTML = `
+        <div style="padding:12px 16px;background:var(--bg);border:1px solid var(--success);border-radius:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:13px;font-weight:600;color:var(--success);">Generated Rule</span>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-sm btn-success" onclick="applyChatRule()">✓ Create Rule</button>
+              <button class="btn btn-sm" onclick="document.getElementById('aiChatRule').style.display='none'">Dismiss</button>
+            </div>
+          </div>
+          <div style="font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--text-muted);">
+            <strong>${esc(rule.name || '?')}</strong> → ${esc(rule.destination || '?')} | Type: ${rule.type || 'push'} | Modality: ${esc(rule.filterModality || 'any')} | Description: ${esc(rule.filterStudyDescription || 'any')} | Source: ${esc(rule.filterCallingAet || 'any')} | Level: ${rule.sendLevel || 'study'}
+          </div>
+        </div>`;
+    }
+
+    async function applyChatRule() {
+      if (!aiChatLastRule) return;
+      if (!confirm('Create this routing rule?\n\n' + (aiChatLastRule.name || 'New rule') + ' → ' + (aiChatLastRule.destination || '?'))) return;
+
+      try {
+        // Save rule to routing-rules.json via the suggestions apply mechanism
+        const result = await aiApiPost('/suggestions/0/apply', { destination: '' });
+        // Actually, we need to directly write the rule
+        // Use the same Lua approach as the routing tab
+        const ruleJson = JSON.stringify(aiChatLastRule).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        const luaScript = `
+local f = io.open("/var/lib/orthanc/routing-rules.json", "r")
+local content = "[]"
+if f then content = f:read("*a") f:close() end
+local rules = ParseJson(content) or {}
+table.insert(rules, ParseJson("${ruleJson}"))
+local out = io.open("/var/lib/orthanc/routing-rules.json", "w")
+if out then
+  local parts = {}
+  for _, r in ipairs(rules) do table.insert(parts, DumpJson(r)) end
+  out:write("[" .. table.concat(parts, ",") .. "]")
+  out:close()
+  LoadRoutingRules()
+  print("OK: Rule added, " .. #ROUTING_RULES .. " rules total")
+else
+  print("ERROR: Cannot write rules file")
+end`;
+        const result2 = await apiText('/tools/execute-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: luaScript
+        });
+
+        if (result2.trim().startsWith('OK')) {
+          toast('Rule created: ' + (aiChatLastRule.name || 'New rule'), 'success');
+          document.getElementById('aiChatRule').style.display = 'none';
+          aiChatLastRule = null;
+          addChatMessage('system', '✅ Rule created successfully!');
+        } else {
+          toast('Failed: ' + result2.trim(), 'error');
+        }
+      } catch (e) {
+        toast('Failed to create rule: ' + e.message, 'error');
       }
     }
 
