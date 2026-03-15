@@ -170,6 +170,7 @@
         <button class="nav-tab" data-section="routing">Routing</button>
         <button class="nav-tab" data-section="logs">Logs</button>
         <button class="nav-tab" data-section="jobs">Jobs</button>
+        <button class="nav-tab" data-section="ai-agent">AI Agent</button>
         <button class="nav-tab" data-section="settings">Settings</button>
       </nav>
     </div>
@@ -419,6 +420,74 @@
         </div>
       </div>
     </section>
+
+    <!-- AI Agent -->
+    <section class="section" id="sec-ai-agent">
+      <div class="section-header">
+        <h2 class="section-title">🤖 AI Routing Agent</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="loadAiTraffic(); loadAiSuggestions(); loadAiExplainer();">Refresh All</button>
+        </div>
+      </div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:20px;">The AI agent monitors DICOM traffic patterns and suggests routing rules in plain English. It detects unrouted studies, stale rules, high-failure destinations, and optimization opportunities.</p>
+
+      <!-- AI Status -->
+      <div id="aiStatusBanner" style="display:none;margin-bottom:16px;padding:12px 16px;border-radius:8px;font-size:13px;"></div>
+
+      <!-- Traffic Monitor -->
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div class="card-title" style="margin-bottom:0;">📊 Traffic Monitor</div>
+          <button class="btn btn-sm" onclick="loadAiTraffic()">Refresh</button>
+        </div>
+
+        <div class="stats-grid" id="aiTrafficStats">
+          <div class="stat-card"><div class="stat-label">Last 24h</div><div class="stat-value" id="aiStat24h">-</div></div>
+          <div class="stat-card"><div class="stat-label">Last 7 Days</div><div class="stat-value" id="aiStat7d">-</div></div>
+          <div class="stat-card"><div class="stat-label">Last 30 Days</div><div class="stat-value" id="aiStat30d">-</div></div>
+          <div class="stat-card"><div class="stat-label">Routed (7d)</div><div class="stat-value" id="aiStatRouted" style="-webkit-text-fill-color:var(--success);">-</div></div>
+          <div class="stat-card" id="aiUnroutedCard"><div class="stat-label">Unrouted (7d)</div><div class="stat-value" id="aiStatUnrouted">-</div></div>
+        </div>
+
+        <div class="grid-2">
+          <div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text-muted);">TOP MODALITIES (7d)</div>
+            <div id="aiChartModalities" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text-muted);">TOP SOURCES (7d)</div>
+            <div id="aiChartSources" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Suggestions -->
+      <div class="card" style="margin-top:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div class="card-title" style="margin-bottom:0;">💡 Rule Suggestions <span id="aiSuggestionCount" style="font-size:12px;font-weight:400;color:var(--text-muted);"></span></div>
+          <button class="btn btn-sm" onclick="loadAiSuggestions()">Refresh</button>
+        </div>
+        <div id="aiSuggestionsList"></div>
+        <div id="aiSuggestionsEmpty" style="display:none;text-align:center;padding:32px;color:var(--text-muted);">
+          <div style="font-size:36px;margin-bottom:8px;opacity:0.5;">✨</div>
+          <p style="font-size:13px;">No suggestions right now. The AI agent will generate suggestions as traffic patterns emerge.</p>
+        </div>
+      </div>
+
+      <!-- Rule Explainer -->
+      <div class="card" style="margin-top:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div class="card-title" style="margin-bottom:0;">📖 Rule Explainer</div>
+          <button class="btn btn-sm" onclick="loadAiExplainer()">Refresh</button>
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Plain English interpretation of your current routing rules, with recent match statistics.</p>
+        <div id="aiExplainerList"></div>
+        <div id="aiExplainerEmpty" style="display:none;text-align:center;padding:32px;color:var(--text-muted);">
+          <div style="font-size:36px;margin-bottom:8px;opacity:0.5;">📋</div>
+          <p style="font-size:13px;">No routing rules configured yet.</p>
+        </div>
+      </div>
+    </section>
   </main>
 
   <!-- Modality Modal -->
@@ -659,6 +728,7 @@
         if (sec === 'routing') { loadRoutingRules(); loadRoutingLog(); }
         if (sec === 'logs') loadChanges();
         if (sec === 'jobs') loadJobs();
+        if (sec === 'ai-agent') { loadAiTraffic(); loadAiSuggestions(); loadAiExplainer(); }
         if (sec === 'settings') loadSettings();
       });
     });
@@ -1885,6 +1955,226 @@ print("OK")`;
         toast('Failed to submit config: ' + e.message, 'error');
         btn.disabled = false;
         feedback.textContent = '';
+      }
+    }
+
+    // ── AI Agent ──
+    const AI_API = '/ai-api';
+
+    async function aiApi(path) {
+      const res = await fetch(AI_API + path, {
+        headers: { 'Authorization': authHeader }
+      });
+      if (res.status === 401) { doLogout(); throw new Error('Unauthorized'); }
+      if (!res.ok) throw new Error(`AI API error: ${res.status}`);
+      return await res.json();
+    }
+
+    async function aiApiPost(path, body = {}) {
+      const res = await fetch(AI_API + path, {
+        method: 'POST',
+        headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (res.status === 401) { doLogout(); throw new Error('Unauthorized'); }
+      if (!res.ok) throw new Error(`AI API error: ${res.status}`);
+      return await res.json();
+    }
+
+    function showAiStatus(msg, type) {
+      const el = document.getElementById('aiStatusBanner');
+      el.style.display = 'block';
+      el.textContent = msg;
+      if (type === 'error') {
+        el.style.background = 'rgba(248,113,113,0.1)';
+        el.style.border = '1px solid var(--danger)';
+        el.style.color = 'var(--danger)';
+      } else {
+        el.style.display = 'none';
+      }
+    }
+
+    // ── Traffic Monitor ──
+    async function loadAiTraffic() {
+      try {
+        const data = await aiApi('/traffic/summary');
+        document.getElementById('aiStatusBanner').style.display = 'none';
+
+        document.getElementById('aiStat24h').textContent = (data.totals['24h'] || 0).toLocaleString();
+        document.getElementById('aiStat7d').textContent = (data.totals['7d'] || 0).toLocaleString();
+        document.getElementById('aiStat30d').textContent = (data.totals['30d'] || 0).toLocaleString();
+
+        const routed = data.routing?.routed || 0;
+        const unrouted = data.routing?.unrouted || 0;
+        document.getElementById('aiStatRouted').textContent = routed.toLocaleString();
+        const unroutedEl = document.getElementById('aiStatUnrouted');
+        unroutedEl.textContent = unrouted.toLocaleString();
+
+        if (unrouted > 0) {
+          unroutedEl.style.background = 'none';
+          unroutedEl.style.webkitBackgroundClip = 'unset';
+          unroutedEl.style.webkitTextFillColor = 'var(--danger)';
+          document.getElementById('aiUnroutedCard').style.borderColor = 'var(--danger)';
+        } else {
+          unroutedEl.style.background = 'var(--gradient)';
+          unroutedEl.style.webkitBackgroundClip = 'text';
+          unroutedEl.style.webkitTextFillColor = 'transparent';
+          document.getElementById('aiUnroutedCard').style.borderColor = '';
+        }
+
+        renderBarChart('aiChartModalities', data.modalities || [], 'var(--blue-light)');
+        renderBarChart('aiChartSources', data.sources || [], '#b794f4');
+      } catch (e) {
+        showAiStatus('AI Agent is not available. Make sure the ai-agent container is running.', 'error');
+      }
+    }
+
+    function renderBarChart(elementId, items, color) {
+      const container = document.getElementById(elementId);
+      if (!items || items.length === 0) {
+        container.innerHTML = '<div style="font-size:12px;color:var(--text-dim);padding:8px 0;">No data yet</div>';
+        return;
+      }
+      const maxVal = Math.max(...items.map(i => i.count));
+      container.innerHTML = items.map(item => {
+        const pct = maxVal > 0 ? (item.count / maxVal * 100) : 0;
+        return `<div style="display:flex;align-items:center;gap:10px;">
+          <span style="min-width:100px;font-size:12px;font-weight:500;text-align:right;color:var(--text);">${esc(item.name || '?')}</span>
+          <div style="flex:1;height:20px;background:var(--bg);border-radius:4px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${color};border-radius:4px;transition:width 0.5s;"></div>
+          </div>
+          <span style="min-width:36px;font-size:12px;color:var(--text-muted);">${item.count}</span>
+        </div>`;
+      }).join('');
+    }
+
+    // ── AI Suggestions ──
+    async function loadAiSuggestions() {
+      try {
+        const data = await aiApi('/suggestions');
+        const list = document.getElementById('aiSuggestionsList');
+        const empty = document.getElementById('aiSuggestionsEmpty');
+        const countEl = document.getElementById('aiSuggestionCount');
+        const suggestions = data.suggestions || [];
+
+        countEl.textContent = suggestions.length > 0 ? `(${suggestions.length})` : '';
+
+        if (suggestions.length === 0) {
+          list.innerHTML = '';
+          empty.style.display = 'block';
+          return;
+        }
+
+        empty.style.display = 'none';
+        list.innerHTML = suggestions.map(s => {
+          const catIcons = { unrouted: '🔴', stale: '⏳', failure: '⚠️', optimize: '🔧' };
+          const catLabels = { unrouted: 'Unrouted Traffic', stale: 'Stale Rule', failure: 'High Failures', optimize: 'Optimization' };
+          const icon = catIcons[s.category] || '💡';
+          const catLabel = catLabels[s.category] || s.category;
+
+          const confColor = s.confidence >= 80 ? 'var(--success)' : s.confidence >= 50 ? 'var(--warning)' : 'var(--text-muted)';
+          const confLabel = s.confidence >= 80 ? 'High' : s.confidence >= 50 ? 'Medium' : 'Low';
+
+          const applyBtn = s.ruleJson
+            ? `<button class="btn btn-sm btn-success" onclick="applyAiSuggestion(${s.id})">✓ Apply Rule</button>`
+            : '';
+
+          // Convert markdown bold to HTML
+          const descHtml = (s.description || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>').replace(/\n/g, '<br>');
+
+          return `<div class="rule-card" style="border-left:3px solid ${confColor};">
+            <div class="rule-header">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span style="font-size:16px;">${icon}</span>
+                <span class="rule-name">${esc(s.title)}</span>
+                <span class="rule-badge" style="background:rgba(0,163,224,0.1);color:var(--blue-light);">${esc(catLabel)}</span>
+                <span class="rule-badge" style="background:rgba(${s.confidence >= 80 ? '52,211,153' : s.confidence >= 50 ? '251,191,36' : '139,143,163'},0.15);color:${confColor};">${confLabel} (${s.confidence}%)</span>
+              </div>
+              <div style="display:flex;gap:8px;">
+                ${applyBtn}
+                <button class="btn btn-sm" onclick="dismissAiSuggestion(${s.id})">Dismiss</button>
+              </div>
+            </div>
+            <div style="font-size:13px;color:var(--text-muted);margin-top:8px;line-height:1.6;">${descHtml}</div>
+            ${s.ruleJson ? `<div style="margin-top:10px;padding:8px 12px;background:var(--bg);border-radius:6px;font-family:'SF Mono','Menlo',monospace;font-size:11px;color:var(--text-dim);overflow-x:auto;"><strong style="color:var(--text-muted);">Suggested rule:</strong> ${esc(s.ruleJson.name || '')} → ${esc(s.ruleJson.destination || '?')} | Modality: ${esc(s.ruleJson.filterModality || 'any')} | Source AET: ${esc(s.ruleJson.filterCallingAet || 'any')}</div>` : ''}
+          </div>`;
+        }).join('');
+      } catch (e) {
+        // AI agent not available is already shown by traffic
+      }
+    }
+
+    async function applyAiSuggestion(id) {
+      if (!confirm('Apply this suggested rule?\n\nThe rule will be added to your routing configuration. You can edit or delete it later from the Routing tab.')) return;
+      try {
+        const result = await aiApiPost('/suggestions/' + id + '/apply');
+        toast(result.message || 'Rule applied', 'success');
+
+        // Reload rules into Orthanc's Lua engine
+        try {
+          const luaScript = 'LoadRoutingRules() print("OK: " .. #ROUTING_RULES .. " rules reloaded")';
+          await apiText('/tools/execute-script', {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: luaScript
+          });
+        } catch (e) { /* Rule was saved to file, Lua reload is best-effort */ }
+
+        loadAiSuggestions();
+      } catch (e) {
+        toast('Failed to apply suggestion: ' + e.message, 'error');
+      }
+    }
+
+    async function dismissAiSuggestion(id) {
+      try {
+        await aiApiPost('/suggestions/' + id + '/dismiss');
+        toast('Suggestion dismissed', 'info');
+        loadAiSuggestions();
+      } catch (e) {
+        toast('Failed to dismiss: ' + e.message, 'error');
+      }
+    }
+
+    // ── Rule Explainer ──
+    async function loadAiExplainer() {
+      try {
+        const data = await aiApi('/rules/explain');
+        const list = document.getElementById('aiExplainerList');
+        const empty = document.getElementById('aiExplainerEmpty');
+        const rules = data.rules || [];
+
+        if (rules.length === 0) {
+          list.innerHTML = '';
+          empty.style.display = 'block';
+          return;
+        }
+
+        empty.style.display = 'none';
+        list.innerHTML = rules.map(r => {
+          const typeIcon = r.type === 'poll' ? '⟳' : '⚡';
+          const statusColor = r.enabled ? 'var(--success)' : 'var(--text-dim)';
+          const statusLabel = r.enabled ? 'Active' : 'Disabled';
+          // Convert markdown bold to HTML
+          const explainHtml = (r.explanation || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+          return `<div class="rule-card ${r.enabled ? '' : 'disabled'}" style="border-left:3px solid ${statusColor};">
+            <div class="rule-header" style="margin-bottom:4px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:14px;">${typeIcon}</span>
+                <span class="rule-name">${esc(r.name)}</span>
+                <span class="rule-badge ${r.enabled ? 'active' : 'inactive'}">${statusLabel}</span>
+              </div>
+              <div style="display:flex;gap:12px;font-size:12px;color:var(--text-muted);">
+                <span title="Matches in last 24 hours">24h: <strong style="color:var(--text);">${r.matches_24h || 0}</strong></span>
+                <span title="Matches in last 7 days">7d: <strong style="color:var(--text);">${r.matches_7d || 0}</strong></span>
+              </div>
+            </div>
+            <div style="font-size:13px;color:var(--text-muted);line-height:1.6;padding:4px 0 0 26px;">${explainHtml}</div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        // AI agent not available
       }
     }
 

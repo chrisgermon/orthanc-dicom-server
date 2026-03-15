@@ -3,12 +3,15 @@
 -- Rules are managed via the admin page
 -- Supports both "push" (OnStableStudy) and "poll" (periodic PACS query) rules
 -- Storage watermark: auto-deletes oldest studies when disk exceeds threshold
+-- Traffic events: logs study metadata for the AI routing agent
 
 ROUTING_RULES = {}
 ROUTING_LOG_PATH = "/var/lib/orthanc/routing-log.json"
 ROUTING_LOG_MAX = 500
 POLL_SENT_CACHE = {} -- { "ruleHash:seriesUID" = true } for dedup
 POLL_LAST_RUN = {} -- { ruleIndex = timestamp } for scheduling
+TRAFFIC_EVENTS_PATH = "/var/lib/orthanc/traffic-events.json"
+TRAFFIC_EVENTS_MAX = 1000
 
 -- ════════════════════════════════════════════════
 --  JSON Helpers
@@ -316,13 +319,64 @@ function CheckStorageWatermark()
 end
 
 -- ════════════════════════════════════════════════
+--  Traffic Event Logger (for AI routing agent)
+-- ════════════════════════════════════════════════
+
+function AppendTrafficEvent(studyUid, patientName, patientId, modality, studyDescription, callingAet, calledAet, numSeries, numInstances)
+  local events = {}
+  local f = io.open(TRAFFIC_EVENTS_PATH, "r")
+  if f then
+    local content = f:read("*a")
+    f:close()
+    local ok, parsed = pcall(ParseJson, content)
+    if ok and parsed then events = parsed end
+  end
+
+  table.insert(events, {
+    time = os.date("!%Y-%m-%dT%H:%M:%S") .. "Z",
+    studyUid = studyUid or "",
+    patientName = patientName or "",
+    patientId = patientId or "",
+    modality = modality or "",
+    studyDescription = studyDescription or "",
+    callingAet = callingAet or "",
+    calledAet = calledAet or "",
+    numSeries = numSeries or 0,
+    numInstances = numInstances or 0
+  })
+
+  while #events > TRAFFIC_EVENTS_MAX do
+    table.remove(events, 1)
+  end
+
+  local parts = {}
+  for _, e in ipairs(events) do
+    local item = '{"time":' .. QuoteJson(e.time) ..
+      ',"studyUid":' .. QuoteJson(e.studyUid) ..
+      ',"patientName":' .. QuoteJson(e.patientName) ..
+      ',"patientId":' .. QuoteJson(e.patientId) ..
+      ',"modality":' .. QuoteJson(e.modality) ..
+      ',"studyDescription":' .. QuoteJson(e.studyDescription) ..
+      ',"callingAet":' .. QuoteJson(e.callingAet) ..
+      ',"calledAet":' .. QuoteJson(e.calledAet) ..
+      ',"numSeries":' .. tostring(e.numSeries or 0) ..
+      ',"numInstances":' .. tostring(e.numInstances or 0) .. '}'
+    table.insert(parts, item)
+  end
+
+  local out = io.open(TRAFFIC_EVENTS_PATH, "w")
+  if out then
+    out:write("[\n" .. table.concat(parts, ",\n") .. "\n]")
+    out:close()
+  end
+end
+
+-- ════════════════════════════════════════════════
 --  PUSH Rules: OnStableStudy handler
 -- ════════════════════════════════════════════════
 
 function OnStableStudy(studyId, tags, metadata)
   CheckStorageWatermark()
-
-  if #ROUTING_RULES == 0 then return end
 
   local study = ParseJson(RestApiGet("/studies/" .. studyId))
   if not study then return end
@@ -330,6 +384,7 @@ function OnStableStudy(studyId, tags, metadata)
   local mainTags = study.MainDicomTags or {}
   local modality = mainTags.ModalitiesInStudy or ""
   local studyDesc = mainTags.StudyDescription or ""
+  local studyUid = mainTags.StudyInstanceUID or ""
 
   -- Fetch CallingAet/CalledAet from instance metadata
   local callingAet = ""
@@ -344,6 +399,18 @@ function OnStableStudy(studyId, tags, metadata)
       calledAet = instMeta.CalledAET or ""
     end
   end
+
+  -- Patient info
+  local patientTags = study.PatientMainDicomTags or {}
+  local patientName = patientTags.PatientName or ""
+  local patientId = patientTags.PatientID or ""
+
+  -- Log traffic event for AI agent
+  local numSeries = study.Series and #study.Series or 0
+  local numInstances = #instances
+  pcall(AppendTrafficEvent, studyUid, patientName, patientId, modality, studyDesc, callingAet, calledAet, numSeries, numInstances)
+
+  if #ROUTING_RULES == 0 then return end
 
   for _, rule in ipairs(ROUTING_RULES) do
     -- Only process push rules (or backward-compat rules with no type)

@@ -15,6 +15,7 @@ services:
     depends_on:
       - orthanc
       - ohif
+      - ai-agent
     networks:
       - orthanc-net
 
@@ -93,6 +94,7 @@ services:
       - ./config/pending-network-config.json:/var/lib/orthanc/pending-network-config.json
       - ./config/network-status.json:/var/lib/orthanc/network-status.json
       - ./config/server-aetitles.json:/var/lib/orthanc/server-aetitles.json
+      - ./config/traffic-events.json:/var/lib/orthanc/traffic-events.json
       - orthanc-storage:/var/lib/orthanc/db
     environment:
       - ORTHANC__POSTGRESQL__HOST=postgres
@@ -101,6 +103,25 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - orthanc-net
+
+  ai-agent:
+    build: ./ai-agent
+    container_name: ai-dicom-agent
+    restart: unless-stopped
+    volumes:
+      - ./config:/orthanc-data:ro
+      - ai-agent-data:/data
+    environment:
+      - ORTHANC_URL=http://orthanc:8042
+      - TRAFFIC_EVENTS_PATH=/orthanc-data/traffic-events.json
+      - ROUTING_LOG_PATH=/orthanc-data/routing-log.json
+      - ROUTING_RULES_PATH=/orthanc-data/routing-rules.json
+      - POLL_INTERVAL_SECONDS=60
+      - TZ=Australia/Brisbane
+    depends_on:
+      - orthanc
     networks:
       - orthanc-net
 
@@ -126,6 +147,8 @@ volumes:
   orthanc-storage:
     driver: local
   postgres-data:
+    driver: local
+  ai-agent-data:
     driver: local
 
 networks:
