@@ -825,12 +825,56 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 def chat_endpoint(body: ChatRequest):
-    """Conversational rule building with Claude."""
+    """Conversational rule building and HL7 analysis with Claude."""
     if not config.LLM_ENABLED:
         raise HTTPException(503, "LLM not configured — set ANTHROPIC_API_KEY")
 
     modalities = _get_modalities()
     current_rules = _load_rules()
+
+    # Fetch recent HL7 messages for context
+    hl7_context = ""
+    try:
+        db = get_db()
+        hl7_stats = db.execute(
+            "SELECT COUNT(*) as total FROM hl7_messages"
+        ).fetchone()
+        hl7_recent = db.execute(
+            """SELECT timestamp, message_type, trigger_event, patient_name,
+                      patient_id, accession_number, order_status,
+                      sending_application, sending_facility
+               FROM hl7_messages ORDER BY timestamp DESC LIMIT 50"""
+        ).fetchall()
+
+        if hl7_recent:
+            msg_lines = []
+            for r in hl7_recent:
+                msg_lines.append(
+                    f"  {r['timestamp']} | {r['message_type']}^{r['trigger_event']} | "
+                    f"Patient: {r['patient_name'] or '-'} ({r['patient_id'] or '-'}) | "
+                    f"Acc: {r['accession_number'] or '-'} | Status: {r['order_status'] or '-'} | "
+                    f"From: {r['sending_application'] or ''}"
+                )
+            hl7_context = (
+                f"Total HL7 messages received: {hl7_stats['total']}\n"
+                f"Recent 50 messages (newest first):\n" + "\n".join(msg_lines)
+            )
+
+        # Also get type breakdown
+        type_breakdown = db.execute(
+            """SELECT message_type, trigger_event, COUNT(*) as cnt
+               FROM hl7_messages GROUP BY message_type, trigger_event
+               ORDER BY cnt DESC LIMIT 20"""
+        ).fetchall()
+        if type_breakdown:
+            hl7_context += "\n\nMessage type breakdown:\n" + "\n".join(
+                f"  {r['message_type']}^{r['trigger_event']}: {r['cnt']} messages"
+                for r in type_breakdown
+            )
+
+        db.close()
+    except Exception:
+        pass
 
     try:
         result = llm.chat(
@@ -838,6 +882,7 @@ def chat_endpoint(body: ChatRequest):
             conversation_history=body.conversation,
             available_modalities=modalities,
             current_rules=current_rules,
+            hl7_context=hl7_context,
         )
         return result
     except RuntimeError as e:

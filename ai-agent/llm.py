@@ -179,6 +179,7 @@ def chat(
     conversation_history: list[dict],
     available_modalities: list[dict],
     current_rules: list[dict],
+    hl7_context: str = "",
 ) -> dict:
     """
     Conversational rule building — supports multi-turn refinement.
@@ -208,18 +209,30 @@ def chat(
             for r in current_rules[:10]
         )
 
+    hl7_section = ""
+    if hl7_context:
+        hl7_section = f"""
+
+## HL7 Messages Data
+You have access to recent HL7 messages received by the system. You can analyze them, identify patterns, answer questions about order statuses, patient workflows, and help troubleshoot issues.
+
+{hl7_context}"""
+
     system_prompt = f"""{RULE_SCHEMA_DOCS}
 
 ## Available Destinations
 {modality_list}
 {rules_summary}
+{hl7_section}
 
 ## Conversation Mode
-You are in a conversational mode helping the user build DICOM routing rules. You can:
-- Help them create new rules from natural language descriptions
-- Modify/refine rules based on follow-up instructions
-- Explain what a rule does
-- Answer questions about DICOM routing
+You are in a conversational mode helping the user with:
+- Creating/modifying DICOM routing rules from natural language
+- Analyzing HL7 messages — patterns, exceptions, order statuses, patient workflows
+- Answering questions about DICOM routing and HL7 messaging
+- Building workflows that combine HL7 triggers with DICOM routing
+
+When the user asks about HL7 messages, analyze the data provided and give clear answers with specifics (counts, patient names, statuses, timestamps).
 
 When the user describes a rule they want, include a JSON code block with the rule. Format:
 ```json
