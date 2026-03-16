@@ -163,13 +163,32 @@ function MatchesFilter(value, filter)
   end
   if pattern == "" then return true end
   local lv = string.lower(value)
-  local lf = string.lower(pattern)
-  lf = lf:gsub("%%", "%%%%")
-  lf = lf:gsub("%.", "%%.")
-  lf = lf:gsub("%*", ".*")
-  local found = string.find(lv, lf) ~= nil
-  if negate then return not found end
-  return found
+
+  -- Support comma-separated AND patterns: all must match
+  local patterns = {}
+  for p in pattern:gmatch("[^,]+") do
+    local trimmed = p:match("^%s*(.-)%s*$")
+    if trimmed and trimmed ~= "" then
+      table.insert(patterns, trimmed)
+    end
+  end
+  if #patterns == 0 then return true end
+
+  for _, pat in ipairs(patterns) do
+    local lf = string.lower(pat)
+    lf = lf:gsub("%%", "%%%%")
+    lf = lf:gsub("%.", "%%.")
+    lf = lf:gsub("%*", ".*")
+    local found = string.find(lv, lf) ~= nil
+    if not found then
+      -- One pattern didn't match → AND fails
+      if negate then return true end
+      return false
+    end
+  end
+  -- All patterns matched
+  if negate then return false end
+  return true
 end
 
 -- ════════════════════════════════════════════════

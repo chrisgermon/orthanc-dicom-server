@@ -724,8 +724,8 @@
       </div>
       <div class="form-group">
         <label>Series Description</label>
-        <input type="text" id="ruleFilterSeriesDescription" placeholder="e.g. *lung window*, *axial*">
-        <p style="font-size:11px;color:var(--text-dim);margin-top:4px;">Most useful with Series send level. Use * as wildcard, ! prefix to negate.</p>
+        <input type="text" id="ruleFilterSeriesDescription" placeholder="e.g. *1.0*,*LUNG*">
+        <p style="font-size:11px;color:var(--text-dim);margin-top:4px;">Use * as wildcard, ! to negate. Comma-separated = AND (all must match), e.g. <code>*1.0*,*LUNG*</code></p>
       </div>
       <div class="form-group">
         <label>Slice Thickness (mm)</label>
@@ -767,7 +767,7 @@
         </label>
       </div>
 
-      <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Leave filters blank to match all. Use * as wildcard. Prefix with ! to negate (e.g. !AURVCMOD3 excludes that AET).</p>
+      <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Leave filters blank to match all. Use * as wildcard. Prefix with ! to negate. Use commas for AND logic (e.g. <code>*1.0*,*LUNG*</code> = must contain both).</p>
       <div class="modal-actions">
         <button class="btn" onclick="closeRuleModal()">Cancel</button>
         <button class="btn btn-primary" onclick="saveRule()">Save</button>
