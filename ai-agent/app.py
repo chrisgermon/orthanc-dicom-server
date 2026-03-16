@@ -426,12 +426,25 @@ def test_rule(body: RuleTestRequest):
             except Exception:
                 continue
 
-            study_uid = content.get("0020,000d") or content.get("StudyInstanceUID", "")
-            study_desc = content.get("0008,1030") or content.get("StudyDescription", "")
-            patient_name = content.get("0010,0010") or content.get("PatientName", "")
-            patient_id = content.get("0010,0020") or content.get("PatientID", "")
-            study_mod = content.get("0008,0061") or content.get("ModalitiesInStudy", "")
-            study_date = content.get("0008,0020") or content.get("StudyDate", "")
+            def tag_val(v):
+                """Extract string from DICOM tag value (may be str or {"Value":[...]})."""
+                if v is None:
+                    return ""
+                if isinstance(v, str):
+                    return v
+                if isinstance(v, dict):
+                    vals = v.get("Value", [])
+                    if vals and len(vals) > 0:
+                        return str(vals[0])
+                    return ""
+                return str(v)
+
+            study_uid = tag_val(content.get("0020,000d") or content.get("StudyInstanceUID"))
+            study_desc = tag_val(content.get("0008,1030") or content.get("StudyDescription"))
+            patient_name = tag_val(content.get("0010,0010") or content.get("PatientName"))
+            patient_id = tag_val(content.get("0010,0020") or content.get("PatientID"))
+            study_mod = tag_val(content.get("0008,0061") or content.get("ModalitiesInStudy"))
+            study_date = tag_val(content.get("0008,0020") or content.get("StudyDate"))
 
             # Apply negation filters locally
             if modality_filter and "!" in modality_filter:
@@ -448,7 +461,7 @@ def test_rule(body: RuleTestRequest):
                 "modality": study_mod,
                 "studyDescription": study_desc,
                 "studyDate": study_date,
-                "seriesCount": 0,  # Not available from C-FIND
+                "seriesCount": 0,
                 "matchingSeries": None,
             })
 
