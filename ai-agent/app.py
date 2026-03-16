@@ -11,6 +11,7 @@ import json
 import os
 import logging
 from contextlib import asynccontextmanager
+import requests
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -329,6 +330,130 @@ def explain_rules():
     """Get plain English explanations of all current routing rules."""
     explanations = suggester.explain_rules()
     return {"rules": explanations}
+
+
+# ── Rule Test / Dry Run ──
+
+
+class RuleTestRequest(BaseModel):
+    rule: dict
+
+
+@app.post("/api/rules/test")
+def test_rule(body: RuleTestRequest):
+    """Dry-run a rule to preview matching studies without routing."""
+    rule = body.rule
+    import fnmatch
+
+    auth = None
+    if config.ORTHANC_USER:
+        auth = (config.ORTHANC_USER, config.ORTHANC_PASS)
+
+    # Build Orthanc query
+    query = {}
+    modality_filter = rule.get("filterModality", "")
+    if modality_filter and "*" not in modality_filter and "!" not in modality_filter:
+        query["ModalitiesInStudy"] = modality_filter
+
+    desc_filter = rule.get("filterStudyDescription") or rule.get("filterDescription", "")
+    if desc_filter and "!" not in desc_filter:
+        clean = desc_filter.replace("*", "")
+        if clean:
+            query["StudyDescription"] = f"*{clean}*"
+
+    try:
+        resp = requests.post(
+            f"{config.ORTHANC_URL}/tools/find",
+            json={"Level": "Study", "Query": query, "Expand": True},
+            auth=auth,
+            timeout=30,
+        )
+        if not resp.ok:
+            raise HTTPException(500, f"Orthanc query failed: {resp.status_code}")
+
+        studies = resp.json()
+    except requests.RequestException as e:
+        raise HTTPException(500, f"Orthanc connection error: {e}")
+
+    # Apply additional filters client-side
+    def matches_filter(value, pattern):
+        if not pattern:
+            return True
+        value = (value or "").lower()
+        pattern = pattern.lower()
+        if pattern.startswith("!"):
+            return not fnmatch.fnmatch(value, pattern[1:])
+        return fnmatch.fnmatch(value, pattern)
+
+    matched = []
+    for study in studies:
+        tags = study.get("MainDicomTags", {})
+        patient_tags = study.get("PatientMainDicomTags", {})
+        mod = tags.get("ModalitiesInStudy", "")
+        desc = tags.get("StudyDescription", "")
+
+        if not matches_filter(mod, modality_filter):
+            continue
+        if not matches_filter(desc, desc_filter):
+            continue
+
+        calling_filter = rule.get("filterCallingAet", "")
+        if calling_filter:
+            # Can't easily check calling AET from study data, skip this filter in preview
+            pass
+
+        series_count = len(study.get("Series", []))
+        instance_count = 0
+        matching_series = []
+
+        # If series-level filters, count matching series
+        series_desc_filter = rule.get("filterSeriesDescription", "")
+        slice_thickness_filter = rule.get("filterSliceThickness", "")
+        send_level = rule.get("sendLevel", "study")
+
+        if send_level == "series" and (series_desc_filter or slice_thickness_filter):
+            for series_id in study.get("Series", []):
+                try:
+                    sr = requests.get(
+                        f"{config.ORTHANC_URL}/series/{series_id}",
+                        auth=auth, timeout=10
+                    ).json()
+                    st = sr.get("MainDicomTags", {})
+                    s_desc = st.get("SeriesDescription", "")
+                    s_mod = st.get("Modality", "")
+
+                    if series_desc_filter and not matches_filter(s_desc, series_desc_filter):
+                        continue
+
+                    matching_series.append({
+                        "description": s_desc,
+                        "modality": s_mod,
+                        "instances": len(sr.get("Instances", [])),
+                    })
+                except Exception:
+                    pass
+
+            if not matching_series:
+                continue
+
+        study_date = tags.get("StudyDate", "")
+        matched.append({
+            "studyId": study.get("ID", ""),
+            "patientName": patient_tags.get("PatientName", ""),
+            "patientId": patient_tags.get("PatientID", ""),
+            "modality": mod,
+            "studyDescription": desc,
+            "studyDate": study_date,
+            "seriesCount": series_count,
+            "matchingSeries": matching_series if matching_series else None,
+        })
+
+    return {
+        "totalStudies": len(matched),
+        "destination": rule.get("destination", ""),
+        "ruleName": rule.get("name", ""),
+        "studies": matched[:100],  # Cap at 100
+    }
 
 
 # ── Collect Now (manual trigger) ──

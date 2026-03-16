@@ -1220,6 +1220,7 @@ print("OK")`;
         }
 
         const runNowBtn = ruleType === 'poll' && rule.enabled ? `<button class="btn btn-sm btn-success" onclick="runPollRuleNow('${esc(rule.name || '')}')" title="Run this poll rule immediately">Run Now</button>` : '';
+        const testBtn = `<button class="btn btn-sm" onclick="testRule(${i})" title="Preview matching studies without routing" style="border-color:var(--blue-light);color:var(--blue-light);">🔍 Test</button>`;
 
         return `<div class="rule-card ${rule.enabled ? '' : 'disabled'}">
           <div class="rule-header">
@@ -1230,6 +1231,7 @@ print("OK")`;
               <span class="rule-badge ${rule.enabled ? 'active' : 'inactive'}">${rule.enabled ? 'Active' : 'Inactive'}</span>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
+              ${testBtn}
               ${runNowBtn}
               <label class="toggle">
                 <input type="checkbox" ${rule.enabled ? 'checked' : ''} onchange="toggleRule(${i}, this.checked)">
@@ -1240,6 +1242,7 @@ print("OK")`;
             </div>
           </div>
           <div class="rule-detail">Destination: <strong>${esc(rule.destination || '-')}</strong>${pollInfo} | Filters: ${esc(filterText)}${rule.deleteAfterSend ? ' | <span style="color:var(--danger);">Delete after send</span>' : ''}</div>
+          <div id="testResult-${i}" style="display:none;"></div>
         </div>`;
       }).join('');
 
@@ -1290,6 +1293,68 @@ print("OK")`;
         loadPollStatus();
       } catch (e) {
         toast('Failed to run poll rule: ' + e.message, 'error');
+      }
+    }
+
+    async function testRule(ruleIndex) {
+      const rule = routingRules[ruleIndex];
+      if (!rule) { toast('Rule not found', 'error'); return; }
+
+      const resultEl = document.getElementById('testResult-' + ruleIndex);
+      if (!resultEl) return;
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--text-muted);background:rgba(99,102,241,0.05);border-radius:6px;margin-top:8px;"><span style="animation:pulse 1s infinite;">⏳</span> Testing rule... querying Orthanc for matching studies...</div>';
+
+      try {
+        const data = await aiApiPost('/rules/test', { rule: rule });
+
+        if (data.totalStudies === 0) {
+          resultEl.innerHTML = `<div style="padding:12px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:6px;margin-top:8px;">
+            <div style="font-size:13px;font-weight:600;color:var(--warning);margin-bottom:4px;">⚠️ No matching studies found</div>
+            <div style="font-size:12px;color:var(--text-muted);">No studies in Orthanc currently match this rule's filters.</div>
+            <button class="btn btn-sm" onclick="this.parentElement.parentElement.style.display='none'" style="margin-top:8px;">Dismiss</button>
+          </div>`;
+          return;
+        }
+
+        let studyRows = data.studies.map(s => {
+          const date = s.studyDate ? s.studyDate.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : '-';
+          let seriesInfo = '';
+          if (s.matchingSeries && s.matchingSeries.length > 0) {
+            seriesInfo = `<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">Matching series: ${s.matchingSeries.map(ms => esc(ms.description || ms.modality) + ' (' + ms.instances + ' imgs)').join(', ')}</div>`;
+          }
+          return `<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div>
+              <div style="font-size:12px;"><strong>${esc(s.patientName || '-')}</strong> <span style="color:var(--text-muted);">(${esc(s.patientId || '-')})</span></div>
+              <div style="font-size:11px;color:var(--text-muted);">${esc(s.studyDescription || '-')}</div>
+              ${seriesInfo}
+            </div>
+            <div style="text-align:right;white-space:nowrap;">
+              <span style="padding:2px 6px;border-radius:4px;background:rgba(59,130,246,0.1);color:var(--blue-light);font-size:11px;font-weight:600;">${esc(s.modality || '-')}</span>
+              <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">${esc(date)} · ${s.seriesCount} series</div>
+            </div>
+          </div>`;
+        }).join('');
+
+        resultEl.innerHTML = `<div style="padding:12px;background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.2);border-radius:6px;margin-top:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div>
+              <span style="font-size:14px;font-weight:700;color:var(--success);">${data.totalStudies}</span>
+              <span style="font-size:13px;color:var(--text);"> matching ${data.totalStudies === 1 ? 'study' : 'studies'}</span>
+              <span style="font-size:12px;color:var(--text-muted);"> → ${esc(data.destination || '?')}</span>
+            </div>
+            <button class="btn btn-sm" onclick="this.closest('[id^=testResult]').style.display='none'">Dismiss</button>
+          </div>
+          <div style="max-height:250px;overflow-y:auto;">${studyRows}</div>
+          ${data.totalStudies > 100 ? '<div style="font-size:11px;color:var(--text-muted);margin-top:8px;">Showing first 100 of ' + data.totalStudies + ' studies</div>' : ''}
+        </div>`;
+
+      } catch (e) {
+        resultEl.innerHTML = `<div style="padding:12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);border-radius:6px;margin-top:8px;">
+          <div style="font-size:13px;font-weight:600;color:var(--danger);">❌ Test failed</div>
+          <div style="font-size:12px;color:var(--text-muted);">${esc(e.message)}</div>
+          <button class="btn btn-sm" onclick="this.parentElement.parentElement.style.display='none'" style="margin-top:8px;">Dismiss</button>
+        </div>`;
       }
     }
 
