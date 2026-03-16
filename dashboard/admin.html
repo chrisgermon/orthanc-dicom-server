@@ -631,7 +631,7 @@
             <div class="modal-title" id="nodeConfigTitle">Configure Node</div>
             <div id="nodeConfigContent"></div>
             <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
-              <button class="btn" onclick="document.getElementById('nodeConfigModal').classList.remove('open')">Close</button>
+              <button class="btn" onclick="document.getElementById('nodeConfigModal').classList.remove('active')">Close</button>
               <button class="btn btn-primary" onclick="applyNodeConfig()">Apply</button>
             </div>
           </div>
@@ -1318,7 +1318,7 @@ print("OK")`;
         }
 
         let studyRows = data.studies.map(s => {
-          const date = s.studyDate ? s.studyDate.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : '-';
+          const date = s.studyDate ? String(s.studyDate).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : '-';
           let seriesInfo = '';
           if (s.matchingSeries && s.matchingSeries.length > 0) {
             seriesInfo = `<div style="font-size:11px;color:var(--text-dim);margin-top:2px;">Matching series: ${s.matchingSeries.map(ms => esc(ms.description || ms.modality) + ' (' + ms.instances + ' imgs)').join(', ')}</div>`;
@@ -2671,6 +2671,8 @@ end`;
       container.innerHTML = '';
       drawflowEditor = new Drawflow(container);
       drawflowEditor.reroute = true;
+      drawflowEditor.curvature = 0.5;
+      drawflowEditor.reroute_fix_curvature = true;
       drawflowEditor.start();
 
       // Double-click to configure nodes
@@ -2679,7 +2681,19 @@ end`;
       });
       drawflowEditor.on('nodeMoved', function() {});
 
-      // Double click handler
+      // Double click handler via Drawflow event
+      drawflowEditor.on('nodeSelected', function(nodeId) {
+        clearTimeout(window._dfClickTimer);
+        window._dfClickTimer = setTimeout(() => { window._dfLastClickId = null; }, 400);
+        if (window._dfLastClickId == nodeId) {
+          openNodeConfig(nodeId);
+          window._dfLastClickId = null;
+        } else {
+          window._dfLastClickId = nodeId;
+        }
+      });
+
+      // Also support real dblclick on the container
       container.addEventListener('dblclick', function(e) {
         const nodeEl = e.target.closest('.drawflow-node');
         if (nodeEl) {
@@ -2779,9 +2793,14 @@ end`;
       const nodeType = e.dataTransfer.getData('node-type');
       if (!nodeType || !drawflowEditor) return;
 
-      const rect = e.target.closest('#drawflowCanvas').getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const canvasEl = e.target.closest('#drawflowCanvas') || document.getElementById('drawflowCanvas');
+      const rect = canvasEl.getBoundingClientRect();
+      // Account for Drawflow's internal zoom and pan
+      const zoom = drawflowEditor.zoom || 1;
+      const canvasX = drawflowEditor.canvas_x || 0;
+      const canvasY = drawflowEditor.canvas_y || 0;
+      const x = (e.clientX - rect.left) / zoom - canvasX / zoom;
+      const y = (e.clientY - rect.top) / zoom - canvasY / zoom;
 
       const nodeTemplates = {
         'hl7-trigger': { title: 'HL7 Trigger', inputs: 0, outputs: 1, html: '<div class="title-box">\ud83d\udfe2 HL7 Trigger</div><div class="box">Double-click to configure</div>' },
@@ -2859,7 +2878,7 @@ end`;
 
       title.textContent = cfg.title;
       content.innerHTML = cfg.html;
-      modal.classList.add('open');
+      modal.classList.add('active');
     }
 
     function applyNodeConfig() {
@@ -2895,7 +2914,7 @@ end`;
         drawflowEditor.updateNodeHtml(currentEditingNodeId, `<div class="title-box">\u26aa Notify</div><div class="box">${esc(data.message||'...')}</div>`);
       }
 
-      document.getElementById('nodeConfigModal').classList.remove('open');
+      document.getElementById('nodeConfigModal').classList.remove('active');
       currentEditingNodeId = null;
     }
 
