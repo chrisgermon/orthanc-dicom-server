@@ -344,38 +344,12 @@ def test_rule(body: RuleTestRequest):
     """Dry-run a rule to preview matching studies without routing."""
     rule = body.rule
     import fnmatch
+    from datetime import datetime, timedelta
 
     auth = None
     if config.ORTHANC_USER:
         auth = (config.ORTHANC_USER, config.ORTHANC_PASS)
 
-    # Build Orthanc query
-    query = {}
-    modality_filter = rule.get("filterModality", "")
-    if modality_filter and "*" not in modality_filter and "!" not in modality_filter:
-        query["ModalitiesInStudy"] = modality_filter
-
-    desc_filter = rule.get("filterStudyDescription") or rule.get("filterDescription", "")
-    if desc_filter and "!" not in desc_filter:
-        clean = desc_filter.replace("*", "")
-        if clean:
-            query["StudyDescription"] = f"*{clean}*"
-
-    try:
-        resp = requests.post(
-            f"{config.ORTHANC_URL}/tools/find",
-            json={"Level": "Study", "Query": query, "Expand": True},
-            auth=auth,
-            timeout=30,
-        )
-        if not resp.ok:
-            raise HTTPException(500, f"Orthanc query failed: {resp.status_code}")
-
-        studies = resp.json()
-    except requests.RequestException as e:
-        raise HTTPException(500, f"Orthanc connection error: {e}")
-
-    # Apply additional filters client-side
     def matches_filter(value, pattern):
         if not pattern:
             return True
@@ -385,74 +359,179 @@ def test_rule(body: RuleTestRequest):
             return not fnmatch.fnmatch(value, pattern[1:])
         return fnmatch.fnmatch(value, pattern)
 
+    def get_date_range(filter_val):
+        """Mirror the Lua GetDateRangeQuery logic."""
+        if not filter_val:
+            return ""
+        today = datetime.utcnow().strftime("%Y%m%d")
+        if filter_val == "today":
+            return f"{today}-{today}"
+        days_map = {"yesterday": 1, "7days": 7, "30days": 30, "90days": 90}
+        days = days_map.get(filter_val, 0)
+        if days == 0:
+            return ""
+        start = (datetime.utcnow() - timedelta(days=days)).strftime("%Y%m%d")
+        return f"{start}-{today}"
+
+    modality_filter = rule.get("filterModality", "")
+    desc_filter = rule.get("filterStudyDescription") or rule.get("filterDescription", "")
+    date_filter = rule.get("filterDateRange", "")
+    rule_type = rule.get("type", "push")
+    source = rule.get("source", "")
+
     matched = []
-    for study in studies:
-        tags = study.get("MainDicomTags", {})
-        patient_tags = study.get("PatientMainDicomTags", {})
-        mod = tags.get("ModalitiesInStudy", "")
-        desc = tags.get("StudyDescription", "")
 
-        if not matches_filter(mod, modality_filter):
-            continue
-        if not matches_filter(desc, desc_filter):
-            continue
+    if rule_type == "poll" and source:
+        # ── Poll rule: query the SOURCE PACS via C-FIND ──
+        query = {}
+        if modality_filter and "!" not in modality_filter and "*" not in modality_filter:
+            query["ModalitiesInStudy"] = modality_filter
+        if desc_filter and "!" not in desc_filter:
+            query["StudyDescription"] = desc_filter
 
-        calling_filter = rule.get("filterCallingAet", "")
-        if calling_filter:
-            # Can't easily check calling AET from study data, skip this filter in preview
-            pass
+        date_range = get_date_range(date_filter)
+        if date_range:
+            query["StudyDate"] = date_range
 
-        series_count = len(study.get("Series", []))
-        instance_count = 0
-        matching_series = []
+        try:
+            qr = requests.post(
+                f"{config.ORTHANC_URL}/modalities/{source}/query",
+                json={"Level": "Study", "Query": query},
+                auth=auth, timeout=30,
+            )
+            if not qr.ok:
+                raise HTTPException(500, f"C-FIND to {source} failed: {qr.status_code} {qr.text}")
+            query_id = qr.json().get("ID")
+            if not query_id:
+                raise HTTPException(500, "C-FIND returned no query ID")
+        except requests.RequestException as e:
+            raise HTTPException(500, f"Connection to Orthanc failed: {e}")
 
-        # If series-level filters, count matching series
-        series_desc_filter = rule.get("filterSeriesDescription", "")
-        slice_thickness_filter = rule.get("filterSliceThickness", "")
-        send_level = rule.get("sendLevel", "study")
+        # Get answers
+        try:
+            ans_resp = requests.get(
+                f"{config.ORTHANC_URL}/queries/{query_id}/answers",
+                auth=auth, timeout=30,
+            )
+            answers = ans_resp.json()
+        except Exception as e:
+            raise HTTPException(500, f"Failed to get C-FIND answers: {e}")
 
-        if send_level == "series" and (series_desc_filter or slice_thickness_filter):
-            for series_id in study.get("Series", []):
-                try:
-                    sr = requests.get(
-                        f"{config.ORTHANC_URL}/series/{series_id}",
-                        auth=auth, timeout=10
-                    ).json()
-                    st = sr.get("MainDicomTags", {})
-                    s_desc = st.get("SeriesDescription", "")
-                    s_mod = st.get("Modality", "")
-
-                    if series_desc_filter and not matches_filter(s_desc, series_desc_filter):
-                        continue
-
-                    matching_series.append({
-                        "description": s_desc,
-                        "modality": s_mod,
-                        "instances": len(sr.get("Instances", [])),
-                    })
-                except Exception:
-                    pass
-
-            if not matching_series:
+        for ans_idx in answers:
+            try:
+                content = requests.get(
+                    f"{config.ORTHANC_URL}/queries/{query_id}/answers/{ans_idx}/content",
+                    auth=auth, timeout=10,
+                ).json()
+            except Exception:
                 continue
 
-        study_date = tags.get("StudyDate", "")
-        matched.append({
-            "studyId": study.get("ID", ""),
-            "patientName": patient_tags.get("PatientName", ""),
-            "patientId": patient_tags.get("PatientID", ""),
-            "modality": mod,
-            "studyDescription": desc,
-            "studyDate": study_date,
-            "seriesCount": series_count,
-            "matchingSeries": matching_series if matching_series else None,
-        })
+            study_uid = content.get("0020,000d") or content.get("StudyInstanceUID", "")
+            study_desc = content.get("0008,1030") or content.get("StudyDescription", "")
+            patient_name = content.get("0010,0010") or content.get("PatientName", "")
+            patient_id = content.get("0010,0020") or content.get("PatientID", "")
+            study_mod = content.get("0008,0061") or content.get("ModalitiesInStudy", "")
+            study_date = content.get("0008,0020") or content.get("StudyDate", "")
+
+            # Apply negation filters locally
+            if modality_filter and "!" in modality_filter:
+                if not matches_filter(study_mod, modality_filter):
+                    continue
+            if desc_filter and "!" in desc_filter:
+                if not matches_filter(study_desc, desc_filter):
+                    continue
+
+            matched.append({
+                "studyId": study_uid,
+                "patientName": patient_name,
+                "patientId": patient_id,
+                "modality": study_mod,
+                "studyDescription": study_desc,
+                "studyDate": study_date,
+                "seriesCount": 0,  # Not available from C-FIND
+                "matchingSeries": None,
+            })
+
+    else:
+        # ── Push rule: query local Orthanc ──
+        query = {}
+        if modality_filter and "*" not in modality_filter and "!" not in modality_filter:
+            query["ModalitiesInStudy"] = modality_filter
+        if desc_filter and "!" not in desc_filter:
+            clean = desc_filter.replace("*", "")
+            if clean:
+                query["StudyDescription"] = f"*{clean}*"
+
+        date_range = get_date_range(date_filter)
+        if date_range:
+            query["StudyDate"] = date_range
+
+        try:
+            resp = requests.post(
+                f"{config.ORTHANC_URL}/tools/find",
+                json={"Level": "Study", "Query": query, "Expand": True},
+                auth=auth, timeout=30,
+            )
+            if not resp.ok:
+                raise HTTPException(500, f"Orthanc query failed: {resp.status_code}")
+            studies = resp.json()
+        except requests.RequestException as e:
+            raise HTTPException(500, f"Orthanc connection error: {e}")
+
+        for study in studies:
+            tags = study.get("MainDicomTags", {})
+            patient_tags = study.get("PatientMainDicomTags", {})
+            mod = tags.get("ModalitiesInStudy", "")
+            desc = tags.get("StudyDescription", "")
+
+            if not matches_filter(mod, modality_filter):
+                continue
+            if not matches_filter(desc, desc_filter):
+                continue
+
+            series_count = len(study.get("Series", []))
+            matching_series = []
+            series_desc_filter = rule.get("filterSeriesDescription", "")
+            send_level = rule.get("sendLevel", "study")
+
+            if send_level == "series" and series_desc_filter:
+                for series_id in study.get("Series", []):
+                    try:
+                        sr = requests.get(
+                            f"{config.ORTHANC_URL}/series/{series_id}",
+                            auth=auth, timeout=10,
+                        ).json()
+                        st = sr.get("MainDicomTags", {})
+                        s_desc = st.get("SeriesDescription", "")
+                        s_mod = st.get("Modality", "")
+                        if series_desc_filter and not matches_filter(s_desc, series_desc_filter):
+                            continue
+                        matching_series.append({
+                            "description": s_desc, "modality": s_mod,
+                            "instances": len(sr.get("Instances", [])),
+                        })
+                    except Exception:
+                        pass
+                if not matching_series:
+                    continue
+
+            matched.append({
+                "studyId": study.get("ID", ""),
+                "patientName": patient_tags.get("PatientName", ""),
+                "patientId": patient_tags.get("PatientID", ""),
+                "modality": mod,
+                "studyDescription": desc,
+                "studyDate": tags.get("StudyDate", ""),
+                "seriesCount": series_count,
+                "matchingSeries": matching_series if matching_series else None,
+            })
 
     return {
         "totalStudies": len(matched),
         "destination": rule.get("destination", ""),
         "ruleName": rule.get("name", ""),
-        "studies": matched[:100],  # Cap at 100
+        "source": source if rule_type == "poll" else "local",
+        "studies": matched[:100],
     }
 
 
