@@ -1,11 +1,51 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 
 # ─────────────────────────────────────────────────────────────
-# CrowdDICOM Installer — Store-and-Forward DICOM Gateway
-# Generates a .env file consumed by docker-compose.yml
+# CrowdDICOM Bootstrap Installer
+# When piped via curl, clones the repo and runs scripts/install.sh
+# When run locally, generates a .env file for docker-compose
 # ─────────────────────────────────────────────────────────────
 
+# Detect if running from a pipe (curl | bash)
+if [ -z "${BASH_SOURCE[0]:-}" ] || [ "${BASH_SOURCE[0]:-}" = "bash" ]; then
+  # ── Piped mode: bootstrap from GitHub ──
+  echo ""
+  echo "╔════════════════════════════════════════════════════════════╗"
+  echo "║        CrowdDICOM — Bootstrap Installer                   ║"
+  echo "╚════════════════════════════════════════════════════════════╝"
+  echo ""
+
+  INSTALL_DIR="/opt/crowd-image"
+  REPO_URL="https://github.com/chrisgermon/orthanc-dicom-server.git"
+
+  # Must run as root
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "[ERROR] This script must be run as root. Try: curl -fsSL ... | sudo bash"
+    exit 1
+  fi
+
+  # Ensure git is available
+  if ! command -v git &> /dev/null; then
+    echo "[INFO] Installing git..."
+    apt-get update -qq && apt-get install -y -qq git > /dev/null 2>&1
+  fi
+
+  # Clone or update the repo
+  if [ -d "${INSTALL_DIR}/.git" ]; then
+    echo "[INFO] Existing installation found. Pulling latest..."
+    cd "${INSTALL_DIR}" && git pull origin master
+  else
+    echo "[INFO] Cloning CrowdDICOM repository..."
+    git clone "${REPO_URL}" "${INSTALL_DIR}"
+  fi
+
+  # Hand off to the full installer
+  echo "[INFO] Launching full installer..."
+  exec bash "${INSTALL_DIR}/scripts/install.sh"
+fi
+
+# ── Local mode: generate .env for docker-compose ──
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/.env"
 
@@ -29,15 +69,15 @@ prompt() {
   local value
 
   if [[ -n "$default_value" ]]; then
-    read -rp "  ${prompt_text} [${default_value}]: " value
+    read -rp "  ${prompt_text} [${default_value}]: " value < /dev/tty
     value="${value:-$default_value}"
   else
     while [[ -z "${value:-}" ]]; do
-      read -rp "  ${prompt_text}: " value
+      read -rp "  ${prompt_text}: " value < /dev/tty
     done
   fi
 
-  eval "${var_name}=\"${value}\""
+  printf -v "$var_name" '%s' "$value"
 }
 
 prompt_secret() {
@@ -47,17 +87,17 @@ prompt_secret() {
   local value
 
   if [[ -n "$default_value" ]]; then
-    read -rsp "  ${prompt_text} [${default_value}]: " value
+    read -rsp "  ${prompt_text} [${default_value}]: " value < /dev/tty
     echo ""
     value="${value:-$default_value}"
   else
     while [[ -z "${value:-}" ]]; do
-      read -rsp "  ${prompt_text}: " value
+      read -rsp "  ${prompt_text}: " value < /dev/tty
       echo ""
     done
   fi
 
-  eval "${var_name}=\"${value}\""
+  printf -v "$var_name" '%s' "$value"
 }
 
 # ── Local server settings ──────────────────────────────────
